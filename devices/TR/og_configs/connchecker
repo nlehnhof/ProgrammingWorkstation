@@ -1,0 +1,6 @@
+config globals 'globals'
+    option enabled '1'
+    option track_ipv4 '1.1.1.1'
+    option track_ipv6 '2a00:1450:4001:831::200e'
+    option track_domain 'dns.google.com'
+    option interval '60'

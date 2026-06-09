@@ -1,0 +1,2 @@
+config package_restore 'package_restore'
+	option enabled '1'

@@ -1,0 +1,5 @@
+config globals 'ip_blockd'
+	option max_attempt_count '10'
+	option enabled '1'
+	option reboot_clear '0'
+	option enabled_time_based '1'

@@ -1,0 +1,14 @@
+
+config global global
+	option log_size_limit '128'
+	list log_levels '0'
+	list log_levels '1'
+	list log_levels '2'
+	list log_levels '3'
+	list log_levels '4'
+	list log_levels '5'
+	list log_levels '6'
+	option service_logs '300'
+	option log_compress '0'
+
+config remote_logger 'default'

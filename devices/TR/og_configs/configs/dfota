@@ -1,0 +1,2 @@
+config dfota 'config'
+    option notify '1'

@@ -1,0 +1,43 @@
+STARTING ROUTER SETUP
+Copying Configs from Backup Folder
+Replacing Old Gate Ip
+New Gate IP Updated
+Copying Test File from Backup Folder
+Replacing Old Gate Ip
+New Gate IP Updated
+Connecting to BBB
+Connected to BBB
+Copying FloodLighToggle.py File to BBB
+Verifying FloodLighToggle.py File Upload
+Output:
+total 129348
+-rw-r--r-- 1 raj raj    13429 Mar 13  2025 FloodLighOff.py
+-rwxr-xr-x 1 raj raj    13344 Mar 13  2025 FloodLighOff.py.BAK
+-rw-r--r-- 1 raj raj    13839 Mar 13  2025 FloodLighOn.py
+-rwxr-xr-x 1 raj raj    13343 Mar 13  2025 FloodLighOn.py.BAK
+-rw-r--r-- 1 raj raj    14204 Mar 13 05:08 FloodLighToggle.py
+-rw-r--r-- 1 raj raj 14988572 Mar 13  2025 IR9-V1.0.0.r20039.bin
+-rw-r--r-- 1 raj raj 27234078 Mar 13  2025 RUTX_R_00.07.14.3_WEBUI.bin
+-rw-r--r-- 1 raj raj 27889612 Mar 13  2025 RUTX_R_00.07.15_WEBUI.bin
+-rw-r--r-- 1 raj raj     6056 Mar 13 04:40 firewall
+-rw-r--r-- 1 raj raj 35001901 Mar 13  2025 firmware-IX20-22.5.50.62.bin
+-rw-r--r-- 1 raj raj     2210 Mar 13  2025 network
+-rw-r--r-- 1 raj raj 27234078 Mar 13  2025 root@192.168.81.1
+
+Errors:
+
+FloodLighToggle.py found on BBB
+
+
+Closing Connection to BBB
+Closed Connection to BBB
+Connecting to Router
+Using Temp Password
+Traceback (most recent call last):
+File "C:\Users\u317029\Documents\teltonika\teltonika.py", line 267, in <module>
+ssh_router_connect("temp", "root")
+File "C:\Users\u317029\Documents\teltonika\teltonika.py", line 100, in ssh_router_connect
+ssh_router.connect(router_ip, username=router_user, password=router_temp_pass)
+File "C:\Program Files\Python312\Lib\site-packages\paramiko\client.py", line 409, in connect
+raise NoValidConnectionsError(errors)
+paramiko.ssh_exception.NoValidConnectionsError: [Errno None] Unable to connect to port 22 on 192.168.1.1

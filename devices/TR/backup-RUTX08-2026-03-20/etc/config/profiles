@@ -1,0 +1,11 @@
+
+config general 'general'
+	option path '/etc/profiles/'
+	option profile 'default'
+
+config profile 'default'
+	option id '0'
+	option archive 'default.tar.gz'
+	option md5file 'default.md5'
+	option updated '1774031108'
+

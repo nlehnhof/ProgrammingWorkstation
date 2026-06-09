@@ -1,0 +1,41 @@
+
+config rms_mqtt 'rms_mqtt'
+	option rms_ip 'rms.teltonika.lt'
+	option rms_port '15010'
+	option ca_file '/etc/rms_mqtt/ca.crt'
+	option cert_file '/etc/rms_mqtt/client.crt'
+	option key_file '/etc/rms_mqtt/client.key'
+	option rms_keepalive '60'
+
+config rms_connect_mqtt 'rms_connect_mqtt'
+	option enable '1'
+	option retry '60'
+	option port '15009'
+	option remote 'rms.teltonika-networks.com'
+
+config rms_proxy 'rms_proxy'
+	option enabled '0'
+
+config rms_connect_timer 'rms_connect_timer'
+	option level '3'
+	option next_level '1749113548'
+
+config rms_connect_timer 'default'
+	option repeat_time '21600'
+
+config rms_connect_timer_level
+	option repeat_time '120'
+	option whole_time '3600'
+
+config rms_connect_timer_level
+	option repeat_time '300'
+	option whole_time '3600'
+
+config rms_connect_timer_level
+	option repeat_time '600'
+	option whole_time '3600'
+
+config rms_connect_timer_level
+	option repeat_time '3600'
+	option whole_time '1209600'
+

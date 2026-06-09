@@ -1,0 +1,16 @@
+
+config widget
+	option id 'system'
+	option enabled '1'
+	option position '1'
+
+config widget
+	option id 'rms'
+	option enabled '1'
+	option position '3'
+
+config widget
+	option id 'ports'
+	option enabled '1'
+	option position '4'
+

@@ -1,0 +1,50 @@
+
+
+BusyBox v1.34.1 (2026-03-20 10:15:23 UTC) built-in shell (ash)
+
+
+
+____        _    ___  ____
+
+|  _ \ _   _| |_ / _ \/ ___|
+
+| |_) | | | | __| | | \___ \
+
+|  _ <| |_| | |_| |_| |___) |
+
+|_| \_\\__,_|\__|\___/|____/
+
+--------------------------------------------------------
+
+Teltonika RUTX series 2026
+
+--------------------------------------------------------
+
+Device:     RUTX08
+
+Kernel:     6.6.119
+
+Firmware:   RUTX_R_00.07.21.3
+
+Build:      40729a45af5
+
+Build date: 2026-03-20 11:37:35
+
+--------------------------------------------------------
+
+~ INTERNAL API USAGE ~
+
+
+
+/sbin/api GET /system/device/status
+
+/sbin/api POST /interfaces/config {...}
+
+
+
+Docs: https://developers.teltonika-networks.com
+
+--------------------------------------------------------
+
+root@RUTX08:~#
+Incorrect! Firmware Not Installed

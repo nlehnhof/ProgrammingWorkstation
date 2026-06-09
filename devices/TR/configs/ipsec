@@ -1,0 +1,3 @@
+config ipsec 'global'
+	option rtinstall_enabled '1'
+	option make_before_break '0'

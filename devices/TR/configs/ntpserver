@@ -1,0 +1,3 @@
+config ntpserver 'general'
+	option enabled '0'
+    

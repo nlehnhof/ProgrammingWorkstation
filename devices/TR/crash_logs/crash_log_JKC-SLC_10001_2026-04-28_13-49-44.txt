@@ -1,0 +1,4 @@
+STARTING ROUTER SETUP
+Copying Configs from Backup Folder
+Replacing Old Gate Ip
+Incorrect! New Gate IP Not Updated

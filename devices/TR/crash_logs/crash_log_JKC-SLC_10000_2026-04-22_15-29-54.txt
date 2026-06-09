@@ -1,0 +1,50 @@
+
+Firmware:   RUTX_R_00.07.21.3
+
+Build:      40729a45af5
+
+Build date: 2026-03-20 11:37:35
+
+--------------------------------------------------------
+
+~ INTERNAL API USAGE ~
+
+
+
+/sbin/api GET /system/device/status
+
+/sbin/api POST /interfaces/config {...}
+
+
+
+Docs: https://developers.teltonika-networks.com
+
+--------------------------------------------------------
+
+root@RUTX08:~#
+Confirmed Firmware Install
+Resetting Temp Password to New Password
+Sending New Password
+Confirming New Password
+Closing Connection to Router
+Closed Connection to Router
+Connecting to Router
+Connecting to Router
+Using Temp Password
+Traceback (most recent call last):
+File "C:\Users\u317029\Documents\teltonika\teltonika.py", line 373, in <module>
+ssh_router_connect("temp", "admin")
+File "C:\Users\u317029\Documents\teltonika\teltonika.py", line 100, in ssh_router_connect
+ssh_router.connect(router_ip, username=router_user, password=router_temp_pass)
+File "C:\Program Files\Python312\Lib\site-packages\paramiko\client.py", line 485, in connect
+self._auth(
+File "C:\Program Files\Python312\Lib\site-packages\paramiko\client.py", line 818, in _auth
+raise saved_exception
+File "C:\Program Files\Python312\Lib\site-packages\paramiko\client.py", line 805, in _auth
+self._transport.auth_password(username, password)
+File "C:\Program Files\Python312\Lib\site-packages\paramiko\transport.py", line 1638, in auth_password
+return self.auth_handler.wait_for_response(my_event)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+File "C:\Program Files\Python312\Lib\site-packages\paramiko\auth_handler.py", line 263, in wait_for_response
+raise e
+paramiko.ssh_exception.AuthenticationException: Authentication failed.

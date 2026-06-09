@@ -1,0 +1,33 @@
+# ********************************************************************
+#
+#  File        :  user.filter
+#
+#  Purpose     :  Rules to process the content of web pages
+#
+#  Copyright   :  Written by and Copyright (C) 2006-2020 the
+#                 Privoxy team. https://www.privoxy.org/
+#
+# We value your feedback. However, to provide you with the best support,
+# please note:
+#
+#  * Use the support forum to get help:
+#    https://sourceforge.net/p/ijbswa/support-requests/
+#  * Submit bugs only thru our bug forum:
+#    https://sourceforge.net/p/ijbswa/bugs/
+#    Make sure that the bug has not already been submitted. Please try
+#    to verify that it is a Privoxy bug, and not a browser or site
+#    bug first. If you are using your own custom configuration, please
+#    try the stock configs to see if the problem is a configuration
+#    related bug. And if not using the latest development snapshot,
+#    please try the latest one. Or even better, CVS sources.
+#  * Submit feature requests only thru our feature request forum:
+#    https://sourceforge.net/p/ijbswa/feature-requests/
+#
+# For any other issues, feel free to use the mailing lists.
+# Anyone interested in actively participating in development and related
+# discussions can join the appropriate mailing list here:
+# https://lists.privoxy.org/mailman/listinfo Archives are available
+# here too.
+#
+#################################################################################
+

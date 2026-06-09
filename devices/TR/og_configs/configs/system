@@ -1,0 +1,32 @@
+
+config system 'system'
+	option timezone 'UTC'
+	option ttylogin '0'
+	option log_buffer_size '128'
+	option log_size '200'
+	option urandom_seed '0'
+	option device_fw_version 'RUTX_R_00.07.14.3'
+	option device_code 'RUTX0800XXXX'
+	option devicename 'RUTX08'
+	option hostname 'RUTX08'
+
+config timeserver 'ntp'
+	option zoneName 'UTC'
+	option enabled '0'
+	option enable_server '0'
+	list server '0.pool.ntp.org'
+	list server '1.pool.ntp.org'
+	list server '2.pool.ntp.org'
+	list server '3.pool.ntp.org'
+
+config debug 'debug'
+	option sms_utils_debug_level '4'
+
+config remote_logger 'default'
+
+config banner 'banner'
+	option enabled '0'
+
+config ledman 'ledman'
+	option enabled '1'
+

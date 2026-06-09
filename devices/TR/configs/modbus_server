@@ -1,0 +1,2 @@
+config modbus 'modbus'
+	option keepconn '1'

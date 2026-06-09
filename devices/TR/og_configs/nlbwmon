@@ -1,0 +1,8 @@
+config nlbwmon
+	option enabled '0'
+	option database_directory '/usr/local/share/nlbwmon/data.db'
+	option database_generations '1'
+	list local_network '192.168.0.0/16'
+	list local_network '172.16.0.0/12'
+	list local_network '10.0.0.0/8'
+	list local_network 'fd00::/8'

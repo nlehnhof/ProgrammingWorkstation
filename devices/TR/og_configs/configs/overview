@@ -1,0 +1,61 @@
+
+config overview
+	option id 'system'
+	option enabled '1'
+	option position '1'
+
+config overview
+	option id 'interface'
+	option position '2'
+	option enabled '1'
+	option section_name 'lan'
+
+config overview
+	option id 'interface'
+	option position '3'
+	option enabled '1'
+	option section_name 'wan'
+
+config overview
+	option id 'interface'
+	option position '4'
+	option enabled '1'
+	option section_name 'wan6'
+
+config overview
+	option id 'access_control'
+	option enabled '0'
+	option position '5'
+
+config overview
+	option id 'system_events'
+	option enabled '1'
+	option position '6'
+
+config overview
+	option id 'network_events'
+	option enabled '1'
+	option position '7'
+
+config overview
+	option id 'monitoring'
+	option enabled '1'
+	option position '8'
+
+config overview
+	option id 'connchecker'
+	option position '9'
+	option enabled '1'
+	option section_name 'globals'
+
+config overview
+	option id 'failover_priority'
+	option enabled '1'
+	option position '10'
+
+config overview
+	option id 'interface'
+	option position '11'
+	option enabled '1'
+	option section_name 'lan1'
+

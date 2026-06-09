@@ -1,0 +1,22 @@
+######################################################################
+# 
+#  File        :  user.action
+# 
+#  Purpose     :  User-maintained actions file, see
+#                 https://www.privoxy.org/user-manual/actions-file.html
+#
+######################################################################
+# Aliases
+######################################################################
+{{alias}}
+######################################################################
++crunch-all-cookies = +crunch-incoming-cookies +crunch-outgoing-cookies
+-crunch-all-cookies = -crunch-incoming-cookies -crunch-outgoing-cookies
+ allow-all-cookies  = -crunch-all-cookies -session-cookies-only -filter{content-cookies}
+ allow-popups       = -filter{all-popups} -filter{unsolicited-popups}
++block-as-image     = +block{Blocked image request.} +handle-as-image
+-block-as-image     = -block
+
+allow-ads   = -block -filter{banners-by-size} -filter{banners-by-link}
+## end aliases ########################################################
+

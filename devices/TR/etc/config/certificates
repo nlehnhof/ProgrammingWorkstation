@@ -1,0 +1,32 @@
+
+config certificate
+	option datetime '-'
+	option type 'cert'
+	option name 'root_ca'
+	option cert_type 'root_ca'
+	option key_size '-'
+	option fullname 'ca-certificates.crt'
+	option path '/etc/ssl/certs/ca-certificates.crt'
+
+config certificate
+	option datetime '2089361787'
+	option encryption 'ecc'
+	option type 'cert'
+	option name 'Teltonika'
+	option cert_type 'server'
+	option key_size '256'
+	option fullname 'uhttpd.crt'
+	option path '/etc/uhttpd.crt'
+	list services 'uhttpd:main'
+
+config certificate
+	option datetime '2089361787'
+	option encryption 'ecc'
+	option pass_required '0'
+	option type 'key'
+	option cert_type 'server'
+	option key_size '256'
+	option fullname 'uhttpd.key'
+	option path '/etc/uhttpd.key'
+	list services 'uhttpd:main'
+

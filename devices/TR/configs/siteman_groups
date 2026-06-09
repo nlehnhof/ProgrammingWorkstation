@@ -1,0 +1,10 @@
+
+config group '1'
+	option name 'default_tap'
+	option platform 'default'
+	option default '1'
+
+config group '2'
+	option name 'default_switch'
+	option platform 'switch'
+	option default '1'

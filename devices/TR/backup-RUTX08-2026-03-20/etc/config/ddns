@@ -1,0 +1,17 @@
+
+config ddns 'global'
+	option ddns_dateformat '%F %R'
+	option ddns_loglines '250'
+	option upd_privateip '1'
+	option use_curl '1'
+
+config service 'myddns'
+	option lookup_host 'yourhost.example.com'
+	option domain 'yourhost.example.com'
+	option username 'your_username'
+	option password 'your_password'
+	option interface 'wan'
+	option ip_source 'network'
+	option ip_network 'wan'
+	option service_name 'dyn.com'
+

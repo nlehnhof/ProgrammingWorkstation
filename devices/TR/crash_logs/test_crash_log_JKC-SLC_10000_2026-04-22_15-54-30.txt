@@ -1,0 +1,10 @@
+JetDock
+Connection failed: [Errno 113] No route to host
+Not connected
+Not connected
+Not connected
+Not connected
+Not connected
+Not connected
+Not connected
+Already disconnected

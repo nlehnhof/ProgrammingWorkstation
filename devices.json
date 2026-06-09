@@ -1,0 +1,14 @@
+{
+    "TR": {
+        "type": "ssh_device",
+        "path": "..\\OneDrive - Oshkosh Corporation-oskgovus\\Documents\\teltonika",
+        "ip": "19",
+        "username": "admin",
+        "password": "admin"
+    },
+    "Russ": {
+        "Path": "..//Documents//teltonika",
+        "Username": "Russell",
+        "type": "ssh_device"
+    }
+}

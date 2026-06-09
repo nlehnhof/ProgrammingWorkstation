@@ -1,0 +1,35 @@
+config siteman general
+	option enabled '0'
+	option dhcp_option '43'
+
+config cert defaults
+	option days '5475'
+	option bits '2048'
+	option country 'LT'
+	option state 'Vilnius'
+	option location 'Vilnius'
+	option commonname 'Teltonika'
+
+config track
+	option config 'siteman_wireless'
+	option handler 'wireless'
+
+config track
+	option config 'siteman_network'
+	option handler 'network'
+
+config track
+	option config 'siteman_periodic_reboot'
+	option handler 'periodic_reboot'
+
+config track
+	option config 'siteman_ping_reboot'
+	option handler 'ping_reboot'
+
+config track
+	option config 'siteman_ports'
+	option handler 'ports'
+
+config track
+	option config 'siteman_vlan'
+	option handler 'vlan'

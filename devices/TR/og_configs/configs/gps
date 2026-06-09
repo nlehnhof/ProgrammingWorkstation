@@ -1,0 +1,284 @@
+config section gpsd
+	option 'enabled' '0'
+	option 'galileo_sup' '0'
+	option 'glonass_sup' '0'
+	option 'beidou_sup' '0'
+
+config section nmea_forwarding
+	option 'enabled' '0'
+
+config section nmea_serial_forwarding
+
+config section nmea_forwarding_cache
+	option 'type' 'ram'
+	option 'sentences_max' '5000'
+	option 'location' ''
+
+config section nmea_collecting
+	option 'enabled' '0'
+	option 'location' ''
+
+config nmea_rule 'GPGSV'
+	option 'forwarding_enabled' '0'
+	option 'forwarding_interval' '5'
+	option 'collecting_enabled' '0'
+	option 'collecting_interval' '5'
+
+config nmea_rule 'GPGGA'
+	option 'forwarding_enabled' '0'
+	option 'forwarding_interval' '5'
+	option 'collecting_enabled' '0'
+	option 'collecting_interval' '5'
+
+config nmea_rule 'GPVTG'
+	option 'forwarding_enabled' '0'
+	option 'forwarding_interval' '5'
+	option 'collecting_enabled' '0'
+	option 'collecting_interval' '5'
+
+config nmea_rule 'GPRMC'
+	option 'forwarding_enabled' '0'
+	option 'forwarding_interval' '5'
+	option 'collecting_enabled' '0'
+	option 'collecting_interval' '5'
+
+config nmea_rule 'GPGSA'
+	option 'forwarding_enabled' '0'
+	option 'forwarding_interval' '5'
+	option 'collecting_enabled' '0'
+	option 'collecting_interval' '5'
+
+config nmea_rule 'GLGSV'
+	option 'forwarding_enabled' '0'
+	option 'forwarding_interval' '5'
+	option 'collecting_enabled' '0'
+	option 'collecting_interval' '5'
+
+config nmea_rule 'GNGSA'
+	option 'forwarding_enabled' '0'
+	option 'forwarding_interval' '5'
+	option 'collecting_enabled' '0'
+	option 'collecting_interval' '5'
+
+config nmea_rule 'GNGNS'
+	option 'forwarding_enabled' '0'
+	option 'forwarding_interval' '5'
+	option 'collecting_enabled' '0'
+	option 'collecting_interval' '5'
+
+config nmea_rule 'GAGSV'
+	option 'forwarding_enabled' '0'
+	option 'forwarding_interval' '5'
+	option 'collecting_enabled' '0'
+	option 'collecting_interval' '5'
+
+config nmea_rule 'PQGSV'
+	option 'forwarding_enabled' '0'
+	option 'forwarding_interval' '5'
+	option 'collecting_enabled' '0'
+	option 'collecting_interval' '5'
+
+config nmea_rule 'PQGSA'
+	option 'forwarding_enabled' '0'
+	option 'forwarding_interval' '5'
+	option 'collecting_enabled' '0'
+	option 'collecting_interval' '5'
+
+config nmea_rule 'GARMC'
+	option 'forwarding_enabled' '0'
+	option 'forwarding_interval' '5'
+	option 'collecting_enabled' '0'
+	option 'collecting_interval' '5'
+
+config nmea_rule 'GAGGA'
+	option 'forwarding_enabled' '0'
+	option 'forwarding_interval' '5'
+	option 'collecting_enabled' '0'
+	option 'collecting_interval' '5'
+
+config nmea_rule 'GAGSA'
+	option 'forwarding_enabled' '0'
+	option 'forwarding_interval' '5'
+	option 'collecting_enabled' '0'
+	option 'collecting_interval' '5'
+
+config nmea_rule 'GAVTG'
+	option 'forwarding_enabled' '0'
+	option 'forwarding_interval' '5'
+	option 'collecting_enabled' '0'
+	option 'collecting_interval' '5'
+
+config nmea_rule 'GBGSV'
+	option 'forwarding_enabled' '0'
+	option 'forwarding_interval' '5'
+	option 'collecting_enabled' '0'
+	option 'collecting_interval' '5'
+
+config nmea_rule 'GBGSA'
+	option 'forwarding_enabled' '0'
+	option 'forwarding_interval' '5'
+	option 'collecting_enabled' '0'
+	option 'collecting_interval' '5'
+
+config nmea_rule 'GQGSV'
+	option 'forwarding_enabled' '0'
+	option 'forwarding_interval' '5'
+	option 'collecting_enabled' '0'
+	option 'collecting_interval' '5'
+
+config nmea_rule 'GQGSA'
+	option 'forwarding_enabled' '0'
+	option 'forwarding_interval' '5'
+	option 'collecting_enabled' '0'
+	option 'collecting_interval' '5'
+
+config nmea_rule 'GLGSA'
+	option 'forwarding_enabled' '0'
+	option 'forwarding_interval' '5'
+	option 'collecting_enabled' '0'
+	option 'collecting_interval' '5'
+
+config nmea_rule 'GLGNS'
+	option 'forwarding_enabled' '0'
+	option 'forwarding_interval' '5'
+	option 'collecting_enabled' '0'
+	option 'collecting_interval' '5'
+
+config nmea_rule 'GNGSV'
+	option 'forwarding_enabled' '0'
+	option 'forwarding_interval' '5'
+	option 'collecting_enabled' '0'
+	option 'collecting_interval' '5'
+
+config nmea_rule 'PQGGA'
+	option 'forwarding_enabled' '0'
+	option 'forwarding_interval' '5'
+	option 'collecting_enabled' '0'
+	option 'collecting_interval' '5'
+
+config nmea_rule 'PQRMC'
+	option 'forwarding_enabled' '0'
+	option 'forwarding_interval' '5'
+	option 'collecting_enabled' '0'
+	option 'collecting_interval' '5'
+
+config nmea_rule 'PQVTG'
+	option 'forwarding_enabled' '0'
+	option 'forwarding_interval' '5'
+	option 'collecting_enabled' '0'
+	option 'collecting_interval' '5'
+
+config nmea_rule 'GNGGA'
+	option 'forwarding_enabled' '0'
+	option 'forwarding_interval' '5'
+	option 'collecting_enabled' '0'
+	option 'collecting_interval' '5'
+
+config nmea_rule 'GNRMC'
+	option 'forwarding_enabled' '0'
+	option 'forwarding_interval' '5'
+	option 'collecting_enabled' '0'
+	option 'collecting_interval' '5'
+
+config nmea_rule 'GNVTG'
+	option 'forwarding_enabled' '0'
+	option 'forwarding_interval' '5'
+	option 'collecting_enabled' '0'
+	option 'collecting_interval' '5'
+
+config nmea_rule 'GPGLL'
+	option 'forwarding_enabled' '0'
+	option 'forwarding_interval' '5'
+	option 'collecting_enabled' '0'
+	option 'collecting_interval' '5'
+
+config nmea_rule 'PQGLL'
+	option 'forwarding_enabled' '0'
+	option 'forwarding_interval' '5'
+	option 'collecting_enabled' '0'
+	option 'collecting_interval' '5'
+
+config nmea_rule 'GBGGA'
+	option 'forwarding_enabled' '0'
+	option 'forwarding_interval' '5'
+	option 'collecting_enabled' '0'
+	option 'collecting_interval' '5'
+
+config nmea_rule 'GBRMC'
+	option 'forwarding_enabled' '0'
+	option 'forwarding_interval' '5'
+	option 'collecting_enabled' '0'
+	option 'collecting_interval' '5'
+
+config nmea_rule 'GBVTG'
+	option 'forwarding_enabled' '0'
+	option 'forwarding_interval' '5'
+	option 'collecting_enabled' '0'
+	option 'collecting_interval' '5'
+
+config nmea_rule 'GBGLL'
+	option 'forwarding_enabled' '0'
+	option 'forwarding_interval' '5'
+	option 'collecting_enabled' '0'
+	option 'collecting_interval' '5'
+
+config nmea_rule 'GPGNS'
+	option 'forwarding_enabled' '0'
+	option 'forwarding_interval' '5'
+	option 'collecting_enabled' '0'
+	option 'collecting_interval' '5'
+
+config nmea_rule 'GAGNS'
+	option 'forwarding_enabled' '0'
+	option 'forwarding_interval' '5'
+	option 'collecting_enabled' '0'
+	option 'collecting_interval' '5'
+
+config nmea_rule 'BDGGA'
+	option 'forwarding_enabled' '0'
+	option 'forwarding_interval' '5'
+	option 'collecting_enabled' '0'
+	option 'collecting_interval' '5'
+
+config nmea_rule 'BDRMC'
+	option 'forwarding_enabled' '0'
+	option 'forwarding_interval' '5'
+	option 'collecting_enabled' '0'
+	option 'collecting_interval' '5'
+
+config nmea_rule 'BDGSV'
+	option 'forwarding_enabled' '0'
+	option 'forwarding_interval' '5'
+	option 'collecting_enabled' '0'
+	option 'collecting_interval' '5'
+
+config nmea_rule 'BDGSA'
+	option 'forwarding_enabled' '0'
+	option 'forwarding_interval' '5'
+	option 'collecting_enabled' '0'
+	option 'collecting_interval' '5'
+
+config nmea_rule 'BDVTG'
+	option 'forwarding_enabled' '0'
+	option 'forwarding_interval' '5'
+	option 'collecting_enabled' '0'
+	option 'collecting_interval' '5'
+
+config nmea_rule 'BDGNS'
+	option 'forwarding_enabled' '0'
+	option 'forwarding_interval' '5'
+	option 'collecting_enabled' '0'
+	option 'collecting_interval' '5'
+
+config section https
+	option 'enabled' '0'
+
+config https_tavl_rule
+	option enabled '0'
+	option type 'mobile'
+	option name 'signal'
+
+config https_tavl_rule
+	option enabled '0'
+	option type 'gpio'
+	option name 'din1'
