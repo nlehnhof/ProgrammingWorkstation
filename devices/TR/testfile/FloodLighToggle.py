@@ -52,7 +52,7 @@ SUPPORTED_FCS = [ 0x01, 0x03, 0x04, 0x05, 0x06, 0x2b ]
 # globals
 #
 
-g_host       = '127.0.0.1'                   # default host
+g_host       = '10.120.30.4'                   # default host
 g_port       = 502                           # default Modbus-TCP port number
 g_socket     = -1                            # socket
 g_active     = False                         # connected flag
@@ -474,11 +474,7 @@ def interact():
     
     while True:
         build()
-             
-#        g_host = '192.168.81.7'
-#        g_host = '192.168.8.22'
-#        g_host = '192.168.81.7'  # PBB LAN direct to PLC
-        g_host = '10.120.30.4'
+            
         connect()
         g_fc = 3 # Read Holding Registers
         g_address = 0x3247 # Address of floodLight HMI PB

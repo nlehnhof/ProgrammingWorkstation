@@ -1,9 +1,0 @@
-
-config dropbear
-	option PasswordAuth 'on'
-	option RootPasswordAuth '1'
-	option Port '22'
-	option enable '1'
-	option IdleTimeout '1800'
-	option _sshWanAccess '0'
-

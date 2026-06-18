@@ -3,6 +3,8 @@ import subprocess
 import time
 import paramiko
 from ping3 import ping
+import re
+import threading
 
 #GUI
 import tkinter as tk
@@ -19,8 +21,12 @@ if len(sys.argv) > 1:
     gate_netmask = sys.argv[2]
     gate_gateway = sys.argv[3]
     temp_pass = sys.argv[4]
+    # my_pass = "Jetway@dm1n"
+    # temp_pass = 'y2E8LsZq'
 else:
     gate_name = "UNKNOWN"
+    print(gate_name, flush=True)
+    sys.exit(0)
     
 #print(f"Running Automation for: {gate_ip}", flush=True)
 
@@ -33,6 +39,9 @@ l_pause = 2
 # sftp_bbb = None
 # ssh_router = None
 # sftp_router = None
+
+# Passwords
+new_pswd = "Jetway@dm1n"
 
 ################# INFO ####################
 #Teltonika router intially had 0.7.11.3 Firmware Version
@@ -84,22 +93,42 @@ def ssh_bbb_close():
 
 def ssh_router_connect(num, admin_num):
     print("Connecting to Router")
-    global ssh_router, sftp_router
-    router_ip = '192.168.1.1'
+    global ssh_router, sftp_router, temp_pass, new_pswd
+    router_ip = '192.168.81.1'
     if admin_num == "admin":
         router_user = 'admin'
     else:
         router_user = 'root'
-    router_temp_pass = temp_pass #'y2E8LsZq'
-    router_new_pass = 'AAAaaa111!!!'
+    router_temp_pass = temp_pass
+    router_new_pass = new_pswd
 
     ssh_router = paramiko.SSHClient()
     ssh_router.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     if num == "temp":
-        print("Using Temp Password", flush=True)
-        ssh_router.connect(router_ip, username=router_user, password=router_temp_pass)
+        print("Using Default IP And Temp Password", flush=True)
+        router_ip = "192.168.1.1"
+        print(router_ip, flush=True)
+        print(router_user, flush=True)
+        print(router_temp_pass, flush=True)
+        time.sleep(1)
+        try:
+            # IP: 192.168.1.1 U: root P: y2E8LsZq
+            ssh_router.connect(router_ip, username=router_user, password=router_temp_pass)
+        except:
+            try:
+                router_ip = "192.168.81.1"
+                # temp_pass = new_pswd  # U: admin P: Jetway@dm1n
+                ssh_router.connect(router_ip, username=router_user, password=new_pswd)
+            except:
+                print("Errors in Authentication", flush=True)
     else:
+        # only not use "temp" when we've already updated the backup to the new ip addr
+        router_ip = "192.168.81.1"
+        router_user = 'admin'
         print("Using New Password", flush=True)
+        print(router_user, flush=True)
+        print(router_new_pass, flush=True)
+        time.sleep(1)
         ssh_router.connect(router_ip, username=router_user, password=router_new_pass)
     
     print("Connected to Router", flush=True)
@@ -143,16 +172,42 @@ def ssh_router_close():
 ######### START OF AUTOMATION SCRIPT #########
 ##############################################
 
+######### CHECK IF ROUTER IS ALREADY PROGRAMMED #########
+
+"""
+- SSH into BBB
+- ssh_bbb_run("ip addr show eth0")
+- read output
+- if /24 scope global eth0 in output
+- return the ip address it's already written to
+- else, continue with programming the router
+"""
+print("Checking if router is already programmed...", flush=True)
+ssh_bbb_connect()
+time.sleep(s_pause)
+output = ssh_bbb_run("ip addr show eth0")
+time.sleep(s_pause)
+
+# Regex for IPV4
+pattern_ipv4 = r'\b10.\d{1,3}\.\d{1,3}.123\b'
+ipv4s = re.findall(pattern_ipv4, output)
+print(ipv4s, flush=True)
+for addr in ipv4s:
+    if addr != "10.28.18.123":
+        print(f"Router already programmed to IP:{addr}", flush=True)
+        sys.exit(0)
+
 """ 
 -Firmware Installation
 -Static IP Setup from BBB to router
 -1st Login into Router and temp pass change
 -Config Files Updates
 -Save and Reboot
-
 """
 print("STARTING ROUTER SETUP", flush=True)
 time.sleep(s_pause)
+
+ssh_router_connect("temp", "root")
 
 ################ Copy Configs from Backup #################
 
@@ -171,25 +226,25 @@ for filename in os.listdir(source_folder):
     if os.path.isfile(source_path):
         shutil.copy2(source_path, destination_path)
 
-################ Update Public Gate IP #################
+################ Update Public Gate IP ################# UPDATED
 
-old_ip = "10.28.18.2"
+old_ip = "10.28.18.2"  # Matches whats in /config/network wan ip addr
 new_ip = str(gate_ip)
 
 old_netmask = "255.255.255.0"
 new_netmask = str(gate_netmask)
 
-with open("C:/Users/u317029/Documents/teltonika/configs/network", 'r') as file:
+with open("C:/Users/admin/Documents/teltonika/configs/network", 'r') as file:
     content = file.read()
     
 print("Replacing Old Gate Ip", flush=True)
 time.sleep(s_pause)
 updated_content = content.replace(old_ip, new_ip)
 
-with open("C:/Users/u317029/Documents/teltonika/configs/network", 'w') as file:
+with open("C:/Users/admin/Documents/teltonika/configs/network", 'w') as file:
     file.write(updated_content)
 
-with open("C:/Users/u317029/Documents/teltonika/configs/network", 'r') as file:
+with open("C:/Users/admin/Documents/teltonika/configs/network", 'r') as file:
     verify = file.read()
     if new_ip in verify:
         print("New Gate IP Updated", flush=True)
@@ -198,10 +253,10 @@ with open("C:/Users/u317029/Documents/teltonika/configs/network", 'r') as file:
         
 time.sleep(s_pause)
 
-############# Copy Python Test File to BBB ############
+############# Copy Python Test File to BBB ############ UPDATED
 
 #print("Removed Current Keys for 192.168.7.2")
-#result = subprocess.run("ssh-keygen -f 'C:\\Users\\u317029/.ssh/known_hosts' -R '192.168.7.2' ")
+#result = subprocess.run("ssh-keygen -f 'C:\\Users\\70u3129/.ssh/known_hosts' -R '192.168.7.2' ")
 #"ssh-keygen -R 'C:\\Users\\u317029/.ssh/known_hosts' -R '192.168.7.2' "
 
 print("Copying Test File from Backup Folder", flush=True)
@@ -214,30 +269,30 @@ os.makedirs(destination_folder, exist_ok=True)
 
 for filename in os.listdir(source_folder):
     source_path = os.path.join(source_folder, filename)
-    destination_path = os.path.join(destination_folder)
+    destination_path = os.path.join(destination_folder, filename)
     
     if os.path.isfile(source_path):
         shutil.copy2(source_path, destination_path)
 
-old_ip = "10.28.18.51"
+old_rip = "127.0.0.1"  ## Get the new_ip into FloodLighToggle.py  (different than the other old_ip!!!!!)
 new_ip = str(gate_ip)
 
-with open("C:/Users/u317029/Documents/teltonika/testfile/FloodLighToggle.py", 'r') as file:
+with open("C:/Users/admin/Documents/teltonika/testfile/FloodLighToggle.py", 'r') as file:
     content = file.read()
     
 print("Replacing Old Gate Ip", flush=True)
 time.sleep(s_pause)
-updated_content = content.replace(old_ip, new_ip)
+updated_content = content.replace(old_rip, new_ip)
 
-with open("C:/Users/u317029/Documents/teltonika/testfile/FloodLighToggle.py", 'w') as file:
+with open("C:/Users/admin/Documents/teltonika/testfile/FloodLighToggle.py", 'w') as file:
     file.write(updated_content)
 
-with open("C:/Users/u317029/Documents/teltonika/testfile/FloodLighToggle.py", 'r') as file:
+with open("C:/Users/admin/Documents/teltonika/testfile/FloodLighToggle.py", 'r') as file:
     verify = file.read()
     if new_ip in verify:
         print("New Gate IP Updated", flush=True)
     else:
-        print("Incorrect! New Gate IP Not Updated", flush=True)
+        print("Incorrect! New Gate IP Not Updated Tel2", flush=True)
         
 time.sleep(s_pause)
 
@@ -262,26 +317,29 @@ print("\n")
 
 ssh_bbb_close()
 
-############## Copy Firmware to Router #############
+############## Copy Firmware to Router ############# UPDATED
 
 ssh_router_connect("temp", "root")
 
 print("Copying Firmware File to Router", flush=True)
+# time.sleep(l_pause)
+# sftp_router.put("C:/Users/admin/Documents/teltonika/backup-RUTX08-2026-04-09.tar.gz", "/tmp/backup-RUTX08-2026-04-09.tar.gz")
 time.sleep(l_pause)
-sftp_router.put("C:/Users/u317029/Documents/teltonika/RUTX_R_00.07.21.3_WEBUI.bin", "/tmp/RUTX_R_00.07.21.3_WEBUI.bin")
+sftp_router.put("C:/Users/admin/Documents/teltonika/RUTX_R_00.07.22.3_WEBUI.bin", "/tmp/RUTX_R_00.07.22.3_WEBUI.bin")
 
+# print("Added Backup File to Router -- Changed IP Addr", flush=True)
 print("Added Firmware File to Router", flush=True)
 time.sleep(s_pause)
 
 shell = ssh_router.invoke_shell()
 
-shell.send("ls -l /tmp/\n")
+shell.send(b"ls -l /tmp/\n")
 time.sleep(s_pause)
 output = shell.recv(5000).decode()
-#print(output, flush=True)
+print(output, flush=True)
 time.sleep(s_pause)
 
-if "RUTX_R_00.07.21.3_WEBUI.bin" in output:
+if "RUTX_R_00.07.22.3_WEBUI.bin" in output:
     print("Firmware File Found on Router", flush=True)
 else:
     print("Incorrect! Firmware File Not Found on Router", flush=True)
@@ -289,36 +347,45 @@ else:
     ssh_bbb_close()
     exit()
     
+# if "backup-RUTX08-2026-04-09.tar.gz" in output:
+#     print("Backup File Found on Router", flush=True)
+# else:
+#     print("Incorrect! Backup File Not Found on Router", flush=True)
+#     ssh_router_close()
+#     ssh_bbb_close()
+#     exit()
+
 time.sleep(s_pause)
 shell.close()
 
-################# Firmware Install #################
+################# Firmware Install ################# UPDATED
 
 print("Installing Firmware", flush=True)
 time.sleep(s_pause)
-ssh_router_run("sysupgrade /tmp/RUTX_R_00.07.21.3_WEBUI.bin\n")
+ssh_router_run("sysupgrade /tmp/RUTX_R_00.07.22.3_WEBUI.bin\n")
 time.sleep(s_pause)
 output = shell.recv(4096).decode()
-#print(output)
-
-print("Waiting for 3.5 minutes for Install", flush=True)
-time.sleep(30)
+print(output)
+# print("Waiting for 5 minutes for Install", flush=True)
+# time.sleep(60)
 print("3 min left", flush=True)
-time.sleep(60)
+time.sleep(75)
 print("2 min left", flush=True)
 time.sleep(60)
 print("1 min left", flush=True)
 time.sleep(60)
+# print("1 min left", flush=True)
+# time.sleep(60)
 print("Install Done", flush=True)
 time.sleep(s_pause)
 
-
-######## First Time Login/Change Pass ########
+######## First Time Login/Change Pass ######## UPDATED
 print("Connecting to Router", flush=True)
 output = ssh_router_connect("temp", "root")
 time.sleep(s_pause)
 
-if "07.21" in output:
+
+if "07.22" in output:
     print("Confirmed Firmware Install", flush=True)
 else:
     print("Incorrect! Firmware Not Installed", flush=True)
@@ -326,66 +393,130 @@ else:
     ssh_bbb_close()
     exit()
 
-shell = ssh_router.invoke_shell()
-time.sleep(s_pause)
-shell.recv(1000)
+# shell = ssh_router.invoke_shell()
+# time.sleep(s_pause)
+# shell.recv(1000)
 
-print("Resetting Temp Password to New Password", flush=True)
-time.sleep(s_pause)
-shell.send("passwd\n")
-time.sleep(s_pause)
-output = shell.recv(2000).decode()
-#print(output, flush=True)
-time.sleep(s_pause)
+# print("Resetting Temp Password to New Password", flush=True)
+# time.sleep(s_pause)
+# shell.send("passwd\n")
+# time.sleep(s_pause)
+# output = shell.recv(2000).decode()
+# #print(output, flush=True)
+# time.sleep(s_pause)
 
-# set new password
-if "Old password" in output:
-    print("Sending Old Password", flush=True)
-    shell.send("y2E8LsZq" + '\n')
-    time.sleep(s_pause)
-    output = shell.recv(2000).decode()
-    time.sleep(s_pause)
-    #print(output, flush=True)
-    time.sleep(s_pause)
+# # set new password
+# if "Old password" in output:
+#     print("Sending Old Password", flush=True)
+#     print("temp_pass: ", temp_pass, flush=True)
+#     shell.send(temp_pass + '\n')
+#     time.sleep(s_pause)
+#     output = shell.recv(2000).decode()
+#     time.sleep(s_pause)
+#     #print(output, flush=True)
+#     time.sleep(s_pause)
     
-if "New password" in output:
-    print("Sending New Password", flush=True)
-    shell.send("AAAaaa111!!!" + '\n')
-    time.sleep(s_pause)
-    output = shell.recv(2000).decode()
-    time.sleep(s_pause)
-    #print(output, flush=True)
-    time.sleep(s_pause)
+# if "New password" in output:
+#     print("Sending New Password", flush=True)
+#     shell.send(new_pswd + '\n')
+#     time.sleep(s_pause)
+#     output = shell.recv(2000).decode()
+#     time.sleep(s_pause)
+#     #print(output, flush=True)
+#     time.sleep(s_pause)
 
-if "Retype password" in output:
-    print("Confirming New Password", flush=True)
-    shell.send("AAAaaa111!!!" + '\n')
-    time.sleep(s_pause)
-    output = shell.recv(2000).decode()
-    time.sleep(s_pause)
-    #print(output, flush=True)
-    time.sleep(s_pause)
+# if "Retype password" in output:
+#     print("Confirming New Password", flush=True)
+#     shell.send(new_pswd + '\n')
+#     time.sleep(s_pause)
+#     output = shell.recv(2000).decode()
+#     time.sleep(s_pause)
+#     #print(output, flush=True)
+#     time.sleep(s_pause)
 
+# ssh_router_close()
+# time.sleep(s_pause)
 
+# print("Connecting to Router", flush=True)
+# ssh_router_connect("new", "root")
+# time.sleep(s_pause)
+
+# shell = ssh_router.invoke_shell()
+# time.sleep(s_pause)
+# shell.recv(1000)
+
+# print("Resetting Temp Password to New Password", flush=True)
+# time.sleep(s_pause)
+# shell.send("passwd\n")
+# time.sleep(s_pause)
+# output = shell.recv(2000).decode()
+# #print(output, flush=True)
+# time.sleep(s_pause)
+
+# # set new password
+# if "Old password" in output:
+#     print("Sending Old Password", flush=True)
+#     shell.send(temp_pass + '\n')
+#     time.sleep(s_pause)
+#     output = shell.recv(2000).decode()
+#     time.sleep(s_pause)
+#     #print(output, flush=True)
+#     time.sleep(s_pause)
     
-print("Done Updating Passwords", flush=True)
-ssh_router_close()
-time.sleep(s_pause)
+# if "New password" in output:
+#     print("Sending New Password", flush=True)
+#     shell.send(new_pswd + '\n')
+#     time.sleep(s_pause)
+#     output = shell.recv(2000).decode()
+#     time.sleep(s_pause)
+#     #print(output, flush=True)
+#     time.sleep(s_pause)
+
+# if "Retype password" in output:
+#     print("Confirming New Password", flush=True)
+#     shell.send(new_pswd + '\n')
+#     time.sleep(s_pause)
+#     output = shell.recv(2000).decode()
+#     time.sleep(s_pause)
+#     #print(output, flush=True)
+#     time.sleep(s_pause)
+    
+# print("Done Updating Passwords", flush=True)
+
+# time.sleep(s_pause)
+# shell.send("ping 192.168.81.1\n")
+# time.sleep(s_pause)
+# output = shell.recv(2000).decode()
+
+# if "bytes=32" in output:
+#     print("Correct IP address", flush=True)
+# else:
+#     print("Wrong IP address", flush=True)
+#     shell.send("ping 192.168.1.1\n")
+#     time.sleep(s_pause)
+#     output = shell.recv(2000).decode()
+#     if "bytes=32" in output:
+#         print("IP address is 192.168.1.1", flush=True)
+#     else:
+#         print("Something is wrong")
+
+# ssh_router_close()
+# time.sleep(s_pause)
 
 ############### UPDATE CONFIGURATION ###############
 
 print("Setting Up Configuration File", flush=True)
 time.sleep(l_pause)
 
-ssh_router_connect("new", "root")
+ssh_router_connect("temp", "root")
 
-############## Config Files to Router ##############
+############## Config Files to Router ############## UPDATED
 
 #82 config files
 print("Copying All Config Files to Router", flush=True)
 time.sleep(l_pause)
 
-local_path = "C:/Users/u317029/Documents/teltonika/configs"
+local_path = "C:/Users/admin/Documents/teltonika/configs"
 sftp_router.put(f"{local_path}/avl", "/etc/config/avl")
 sftp_router.put(f"{local_path}/bgp", "/etc/config/bgp")
 sftp_router.put(f"{local_path}/ble_devices", "/etc/config/ble_devices")
@@ -472,7 +603,7 @@ sftp_router.put(f"{local_path}/xl2tpd", "/etc/config/xl2tpd")
 print("Copied All Config Files to Router", flush=True)
 time.sleep(l_pause)
 
-#################### Get MAC Address #####################
+#################### Get MAC Address ##################### UPDATED
 mac = None
 
 shell = ssh_router.invoke_shell()
@@ -481,10 +612,12 @@ shell.recv(1000)
 
 print("Getting MAC Address", flush=True)
 time.sleep(s_pause)
-shell.send("ifconfig -a\n")
+shell.send(b"ifconfig -a\n")
 time.sleep(s_pause)
 output = shell.recv(2000).decode()
 for line in output.splitlines():
+    if new_ip in line:
+        print("Found new ip in output", flush=True)
     if "eth0" in line and "HWaddr" in line:
         mac = line.split("HWaddr")[1].strip()
         break
@@ -495,7 +628,7 @@ else:
     
 time.sleep(s_pause)
 
-######################## Reboot ##########################
+######################## Reboot ########################## UPDATED
 
 print("Rebooting Router", flush=True)
 time.sleep(l_pause)
@@ -503,31 +636,32 @@ ssh_router_run("reboot\n")
 time.sleep(s_pause)
 
 old_ip = str(gate_ip)
-new_ip = "10.28.18.51"
+new_ip = "10.28.18.2"   ## WAN IP address for the router without programming -- Just reset the files for next time
 
-with open("C:/Users/u317029/Documents/teltonika/configs/network", 'r') as file:
+with open("C:/Users/admin/Documents/teltonika/configs/network", 'r') as file:
     content = file.read()
     
 print("Reverting Network File", flush=True)
 time.sleep(s_pause)
 updated_content = content.replace(old_ip, new_ip)
 
-with open("C:/Users/u317029/Documents/teltonika/configs/network", 'w') as file:
+with open("C:/Users/admin/Documents/teltonika/configs/network", 'w') as file:
     file.write(updated_content)
 
-with open("C:/Users/u317029/Documents/teltonika/configs/network", 'r') as file:
+with open("C:/Users/admin/Documents/teltonika/configs/network", 'r') as file:
     verify = file.read()
     if new_ip in verify:
+        print("New IP revert: ", new_ip, flush=True)
         print("Network File Reverted", flush=True)
     else:
         print("Incorrect! Network File Not Reverted", flush=True)
         
-print("Please Wait 2.5 Mins for Reboot", flush=True)
+print("Please Wait 1.5 Mins for Reboot", flush=True)
 time.sleep(30)
-print("2 min left", flush=True)
-time.sleep(60)
 print("1 min left", flush=True)
 time.sleep(60)
+# print("1 min left", flush=True)
+# time.sleep(60)
 print("Reboot Done", flush=True)
 time.sleep(s_pause)
 

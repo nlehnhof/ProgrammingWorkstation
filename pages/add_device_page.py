@@ -111,20 +111,21 @@ class AddDevice(QMainWindow):
             self.rows.remove(row_widget)
 
     def on_submit(self):
-        # Build dictionary from all dynamic rows
         data = {}
-        for title_field, info_field in self.rows:
-            key = title_field.text().strip()
-            value = info_field.text().strip()
-            if key:  # Only include non-empty keys
-                data[key] = value
+        for row_widget in self.rows:
+            edits = row_widget.findChildren(QLineEdit)
+            if len(edits) >= 2:
+                title_field, info_field = edits[0], edits[1]
+                key = title_field.text().strip()
+                value = info_field.text().strip()
+                if key:
+                    data[key] = value
         try:
             name = data["Name"]
             path = data["Path"]
-        except:
+        except KeyError:
             print("Device must have 'Name' and 'Path' keys/values")
         data["type"] = self.device_dropdown.currentText().strip()
-
         print("Collected Data:", data, flush=True)
 
         # Example: pass dictionary to manager

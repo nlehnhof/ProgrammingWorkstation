@@ -101,7 +101,7 @@ class ProgramPage(QMainWindow):
         if device_info is None:
             print("Device Info not found")
             return
-        program_file = os.path.join(current_dir, f"../devices/{device}/program_device.py")
+        program_file = os.path.join(current_dir, f"../devices/{device}/prog_dev.py")
         func_name = "run_main_script"
         with open(program_file, "r") as file:
             code = file.read()
@@ -109,10 +109,10 @@ class ProgramPage(QMainWindow):
         if code is None:
             print("Nothing found")
             
-        # namespace = {}
-        # exec(code, namespace)
-        # namespace['run_main_script'](self.airport.currentText().strip(), self.gate.currentText().strip(), self.temp_pass)
-        print("Connected...", flush=True)
+        namespace = {}
+        exec(code, namespace)
+        namespace[func_name](self.airport.currentText().strip(), self.gate.currentText().strip(), self.temp_pass, device)
+        # print("Connected...", flush=True)
         
     def update_airports(self):
         """Update airport dropdown based on device chosen."""
@@ -181,3 +181,4 @@ class ProgramPage(QMainWindow):
         user_text=self.router.text().strip()
         print("User Submitted: ", user_text)
         self.temp_pass = user_text.split("PW:")[1].split(";")[0]
+        print("Temp_pass: ", self.temp_pass, flush=True)

@@ -1,8 +1,0 @@
-config landing "general"
-	option auth_proto 'pap'
-	option resourcebase '/resources'
-	option theme 'default'
-
-config theme 'default'
-	option name 'Default theme'
-

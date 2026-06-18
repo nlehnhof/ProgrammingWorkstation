@@ -1,12 +1,10 @@
-
 config rpcd
-	option socket '/var/run/ubus/ubus.sock'
-	option timeout '300'
+	option socket /var/run/ubus/ubus.sock
+	option timeout 300
 
 config login
 	option username 'admin'
 	option group 'root'
-	option _dummy_time '1774032329'
 
 config superuser
 	option username 'admin'
@@ -70,4 +68,3 @@ config group 'user'
 	list write 'system/admin/multiusers/change_password*'
 	list write '!superuser'
 	list write 'core'
-

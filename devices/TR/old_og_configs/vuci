@@ -1,0 +1,11 @@
+
+config core 'main'
+	option session_timeout '1800'
+	option api_session_timeout '300'
+	option lang 'en'
+	option data_analytics '0'
+	option device_identifier '4199df963cd9c2879eb206cf9ffc29de'
+
+config internal 'languages'
+	option en 'English'
+

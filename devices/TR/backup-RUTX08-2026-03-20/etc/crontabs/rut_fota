@@ -1,1 +1,0 @@
-41 11 * * 5 /sbin/rut_fota -i >/dev/null 2>&1 # RUT FOTA

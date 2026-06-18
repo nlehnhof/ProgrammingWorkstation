@@ -238,3 +238,11 @@ config redirect '25'
 	option target 'DNAT'
 	list proto 'tcp'
 
+config rule '26'
+	option enabled '0'
+	option name 'BACnet_2_PBB'
+	option target 'ACCEPT'
+	option src 'wan'
+	list proto 'udp'
+	list dest_port '47808'
+

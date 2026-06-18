@@ -1,5 +1,0 @@
-config section general
-	option 'enabled' '0'
-
-config app 'settings'
-	option refresh_time '30000'

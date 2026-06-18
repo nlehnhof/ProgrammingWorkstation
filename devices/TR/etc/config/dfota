@@ -1,3 +1,0 @@
-config dfota 'config'
-    option notify '1'
-    option rootca '/rom/etc/ssl/certs/ca-certificates.crt'

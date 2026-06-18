@@ -431,7 +431,7 @@ def send():
         ### print(ready)
       
         if len(ready) == 0:
-            break;
+            break
 
         dbyte = g_socket.recv(1)
 
@@ -475,10 +475,6 @@ def interact():
     while True:
         build()
              
-#        g_host = '192.168.81.7'
-#        g_host = '192.168.8.22'
-#        g_host = '192.168.81.7'  # PBB LAN direct to PLC
-        g_host = '10.28.18.51'
         connect()
         g_fc = 3 # Read Holding Registers
         g_address = 0x3247 # Address of floodLight HMI PB

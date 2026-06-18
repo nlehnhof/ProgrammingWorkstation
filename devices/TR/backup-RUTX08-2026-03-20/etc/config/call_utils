@@ -1,3 +1,0 @@
-config call 'call'
-	option action 'reject'
-	option enabled '1'

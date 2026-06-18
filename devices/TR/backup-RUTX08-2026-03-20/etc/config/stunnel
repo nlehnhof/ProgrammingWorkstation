@@ -1,4 +1,0 @@
-config globals 'globals'
-	option setuid 'nobody'
-	option setgid 'nogroup'
-

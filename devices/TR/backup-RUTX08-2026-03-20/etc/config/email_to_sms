@@ -1,3 +1,0 @@
-config pop3 'pop3'
-	option enabled '0'
-	option limit '5'

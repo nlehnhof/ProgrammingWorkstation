@@ -31,7 +31,7 @@ class HomePage(QMainWindow):
         self.add_button = QPushButton("Add Device")
         self.program_button = QPushButton("Program Device")
         self.add_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(1))
-        self.program_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(2))
+        self.program_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(3))
         self.devices_list = QListWidget()
         self.stacked_widget.currentChanged.connect(self.on_page_changed)
 

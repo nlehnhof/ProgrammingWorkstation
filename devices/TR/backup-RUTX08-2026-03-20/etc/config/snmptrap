@@ -1,4 +1,0 @@
-
-config server
-    option enabled 0
-    option community public
