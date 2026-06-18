@@ -136,6 +136,6 @@ class DeviceManager:
                 json.dump(existing_data, f, indent=4)
 
         except OSError as e:
-            print(f"Error writing to {self.json_path}: {e}")
+            print(f"Error writing to {self.json_path}: {e}")             
 
 manager = DeviceManager()

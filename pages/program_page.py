@@ -101,10 +101,13 @@ class ProgramPage(QMainWindow):
         if device_info is None:
             print("Device Info not found")
             return
-        program_file = os.path.join(current_dir, f"devices/{device}/program_device.py")
+        program_file = os.path.join(current_dir, f"../devices/{device}/program_device.py")
         func_name = "run_main_script"
         with open(program_file, "r") as file:
             code = file.read()
+
+        if code is None:
+            print("Nothing found")
             
         # namespace = {}
         # exec(code, namespace)
@@ -120,7 +123,7 @@ class ProgramPage(QMainWindow):
         if device_info is None:
             print("Device Info not found")
             return
-        path = os.path.join(current_dir, f"devices/{device}")
+        path = os.path.join(current_dir, f"../devices/{device}")
         airport_options = get_excel_files(path)
         self.airport.addItems(airport_options)
 
@@ -134,7 +137,7 @@ class ProgramPage(QMainWindow):
         device_info = manager.get_credentials(device)
         if device_info is None:
             return
-        path = os.path.join(current_dir, f"devices/{device}")
+        path = os.path.join(current_dir, f"../devices/{device}")
         if device_info is None:
             print("device info not found")
             return
