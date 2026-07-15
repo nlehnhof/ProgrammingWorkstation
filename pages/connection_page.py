@@ -6,7 +6,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QShowEvent, QPixmap
 from device_types import *
 from devices import *
-from utilities.fonts import header_font, subtitle_font
+from resources.utilities.fonts import header_font, subtitle_font
 
 class ConnectionPage(QMainWindow):
     def __init__(self, stacked_widget):
@@ -35,7 +35,7 @@ class ConnectionPage(QMainWindow):
         # Create QLabel and load image
         image = QLabel()
         try:
-            pixmap = QPixmap("images/router.jpg")  # Replace with your image path
+            pixmap = QPixmap("resources/images/router.jpg")  # Replace with your image path
             if pixmap.isNull():
                 raise FileNotFoundError("Image not found or invalid format.")
             image.setPixmap(pixmap.scaled(600, 400, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))

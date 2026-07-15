@@ -6,7 +6,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QShowEvent
 from device_types import *
 from devices import *
-from utilities.fonts import header_font, subtitle_font
+from resources.utilities.fonts import header_font, subtitle_font
 
 class HomePage(QMainWindow):
     def __init__(self, stacked_widget):
@@ -31,7 +31,7 @@ class HomePage(QMainWindow):
         self.add_button = QPushButton("Add Device")
         self.program_button = QPushButton("Program Device")
         self.add_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(1))
-        self.program_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(3))
+        self.program_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(2))
         self.devices_list = QListWidget()
         self.stacked_widget.currentChanged.connect(self.on_page_changed)
 

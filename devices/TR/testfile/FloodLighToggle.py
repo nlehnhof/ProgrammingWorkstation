@@ -52,7 +52,7 @@ SUPPORTED_FCS = [ 0x01, 0x03, 0x04, 0x05, 0x06, 0x2b ]
 # globals
 #
 
-g_host       = '10.120.30.4'                   # default host
+g_host       = '10.24.100.2'                   # default host
 g_port       = 502                           # default Modbus-TCP port number
 g_socket     = -1                            # socket
 g_active     = False                         # connected flag

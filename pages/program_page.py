@@ -1,18 +1,18 @@
 # program_page.py
-from PyQt5.QtWidgets import QMainWindow, QListWidget, QApplication, QWidget, QLabel, QLineEdit, QPushButton, QTextEdit, QVBoxLayout, QHBoxLayout, QMessageBox, QComboBox
+from PyQt5.QtWidgets import QMainWindow, QCheckBox, QScrollArea, QListWidget, QSizePolicy, QApplication, QWidget, QLabel, QLineEdit, QPushButton, QTextEdit, QVBoxLayout, QHBoxLayout, QMessageBox, QComboBox
 from device_types.ssh_device import SSHDevice
 from PyQt5.QtGui import QShowEvent
 from device_types import *
-from manager import manager
+from core.manager import manager
 import sys
 from pathlib import Path
 from devices import *
 import os
-from utilities.excel_utils import get_dropdown, lookup_excel, get_excel_files
+from resources.utilities.excel_utils import get_dropdown, lookup_excel, get_excel_files
 from PyQt5.QtCore import Qt
 import importlib.util
 import json
-from utilities.fonts import header_font, subtitle_font
+from resources.utilities.fonts import header_font, subtitle_font
 
 current_dir = Path(__file__).parent
 
@@ -27,31 +27,50 @@ class ProgramPage(QMainWindow):
     def _init_ui(self):
         self.setWindowTitle("Program Device Page")
         central_widget = QWidget()
+        central_widget.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.setCentralWidget(central_widget)
         print("Registred Devices: ", registered_devices)
 
         # Layouts
+        outer_layout = QVBoxLayout(central_widget)
+
         first = QVBoxLayout()
-        second = QHBoxLayout()
-        second.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        second.setSpacing(20)
+        first.setContentsMargins(15,15,15,15)
+        first.setSpacing(20)
+
         third = QHBoxLayout()
         third.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        third.setSpacing(20)
+        third.setSpacing(10)
+        third.setContentsMargins(0,0,0,0)
+
         fourth = QHBoxLayout()
-        fourth.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        fourth.setSpacing(20)
+        fourth.setSpacing(10)
+        fourth.setContentsMargins(0,0,0,0)
+
+        self.instructions = QVBoxLayout()
+        self.scroll = QScrollArea()
+        self.scroll.setWidgetResizable(True)
+
+        self.container = QWidget()
+        self.instructions_layout = QVBoxLayout(self.container)
+
+        self.scroll.setWidget(self.container)
+        self.instructions.addWidget(self.scroll)
 
         # Drop Downs
         self.device_chosen = QComboBox()
         self.device_chosen.addItems(registered_devices)
+        self.device_chosen.setFixedWidth(150)
         self.airport = QComboBox()
         self.airport.addItem("No data")
+        self.airport.setFixedWidth(150)
+
         self.gate = QComboBox()
         self.gate.addItem("No data")
+        self.gate.setFixedWidth(150)
+        
         self.home_button = QPushButton("Home")
         self.home_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(0))
-
         self.device_chosen.textActivated.connect(self.update_airports)
         self.airport.textActivated.connect(self.update_gates)
 
@@ -59,40 +78,53 @@ class ProgramPage(QMainWindow):
         title = QLabel("Program Device")
         title.setFont(header_font)
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        l_device = QLabel("Select Device")
+        title.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+
+        l_instr = QLabel("Instructions: ")
+        l_instr.setFont(subtitle_font)
+        l_instr.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        l_device = QLabel("Select Device, Airport, and Gate:")
         l_device.setFont(subtitle_font)
-        l_airport = QLabel("Select Airport")
-        l_airport.setFont(subtitle_font)
-        l_gate = QLabel("Select Gate")
-        l_gate.setFont(subtitle_font)
+        l_device.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        l_device.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.router = QLineEdit()
         self.submit = QPushButton("Submit")
+        self.submit.clicked.connect(self.on_submit)
+
+        qr = QLabel("Scan the QR Code on the device, then hit submit followed by Program Device.")
+        qr.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        qr.setWordWrap(True)
+        qr.setFont(subtitle_font)
 
         # Add
         first.addWidget(self.home_button)
         first.addWidget(title)
-        second.addWidget(l_device)
+        first.addWidget(l_device)
+
         third.addWidget(self.device_chosen)
-        second.addWidget(l_airport)
         third.addWidget(self.airport)
-        second.addWidget(l_gate)
         third.addWidget(self.gate)
+        first.addLayout(third)
+        first.addWidget(l_instr)
+        first.addLayout(self.instructions)
+        first.addStretch()
+        first.addWidget(qr)
         fourth.addWidget(self.router)
         fourth.addWidget(self.submit)
-        self.submit.clicked.connect(self.on_submit)
+        first.addLayout(fourth)
+        
 
         # Program Button
         self.program_button = QPushButton("Program Device")
         self.program_button.clicked.connect(self.program_device)
 
-        first.addLayout(second)
-        first.setContentsMargins(15, 15, 15, 15)
-        first.addLayout(third)
-        first.addLayout(fourth)
         first.addWidget(self.program_button)
-        central_widget.setLayout(first)
-        self.setCentralWidget(central_widget)
 
+        form_widget = QWidget()
+        form_widget.setLayout(first)
+
+        outer_layout.addWidget(form_widget)
+        self.load_instructions(self.device_chosen.currentText())
         self.refresh()
 
     def program_device(self):
@@ -126,6 +158,23 @@ class ProgramPage(QMainWindow):
         path = os.path.join(current_dir, f"../devices/{device}")
         airport_options = get_excel_files(path)
         self.airport.addItems(airport_options)
+        self.load_instructions(device)
+
+    def load_instructions(self, device):
+        while self.instructions_layout.count():
+            item = self.instructions_layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
+
+        file_path = os.path.join(f'C:\\Users\\u324754\\programming_workstation\\devices\\{device}', 'instructions.txt')
+        with open(file_path, "r") as f:
+            for line in f:
+                text = line.strip()
+                if text:
+                    self.instructions_layout.addWidget(QCheckBox(text))
+
+        self.instructions_layout.addStretch()
 
     def update_gates(self):
         """Update Gate dropdown based on airport chosen."""
@@ -158,7 +207,7 @@ class ProgramPage(QMainWindow):
     def refresh(self):
         """Load devices from JSON and update both widgets."""
         try:
-            with open("devices.json", "r", encoding="utf-8") as f:
+            with open("core/devices.json", "r", encoding="utf-8") as f:
                 data = json.load(f)
 
             # Get all top-level keys from JSON

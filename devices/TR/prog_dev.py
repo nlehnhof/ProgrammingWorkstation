@@ -15,6 +15,7 @@ from ping3 import ping
 import sys
 import subprocess
 import os
+import re
 from datetime import datetime
 from collections import deque
 import ipaddress
@@ -84,6 +85,32 @@ def is_valid_ip(ip_string):
     except ValueError:
         return False
     
+def validate_subnet(ip_str, netmask_str):
+    """
+    Determine if an IP belongs to the subnet defined by its own IP and netmask.
+    
+    Args:
+        ip_str (str): IPv4 address (e.g., "10.120.80.4")
+        netmask_str (str): Netmask in dotted decimal (e.g., "255.255.255.0")
+    
+    Returns:
+        tuple: (bool, str) -> (True/False, calculated subnet in CIDR notation)
+    """
+    try:
+        # Convert dotted decimal netmask to prefix length
+        prefix_length = ipaddress.IPv4Network(f"0.0.0.0/{netmask_str}").prefixlen
+        
+        # Build network object from IP + prefix
+        network = ipaddress.IPv4Network(f"{ip_str}/{prefix_length}", strict=False)
+        
+        # Check if IP is in its own network (always True unless invalid input)
+        ip_obj = ipaddress.IPv4Address(ip_str)
+        return (ip_obj in network, str(network))
+    
+    except (ipaddress.AddressValueError, ipaddress.NetmaskValueError, ValueError):
+        return (False, None)
+
+    
 def lookup_excel(sheet, gate, device):
     path = os.path.join(f"devices/{device}", sheet)
     file_path = os.path.join(os.getcwd(), path)
@@ -110,12 +137,12 @@ def lookup_excel(sheet, gate, device):
                         gate_ip = row[idx - 3]
                         gate_netmask = row[idx - 2]
                         gate_gateway = row[idx - 1]
-                        if is_valid_ip(gate_ip):
+                        if is_valid_ip(gate_ip) and validate_subnet(gate_ip, gate_netmask):
                             print(f"Gate IP: {gate_ip}", flush=True)
                             print(f"Netmask: {gate_netmask}", flush=True)
                             print(f"Gateway: {gate_gateway}", flush=True)
                         else:
-                            print(f"Invalid IP: {gate_ip}", flush=True)
+                            print(f"Invalid IP and/or subnet: {gate_ip}; {gate_netmask}", flush=True)
                             print("Select Another Option", flush=True)
                             valid_ip = False
                     if row[idx + 10] is not None:
@@ -130,9 +157,13 @@ def lookup_excel(sheet, gate, device):
 def run_main_script(airport, gate, temp_pass, device):
     lookup_excel(airport, gate, device)
     current_dir = os.getcwd()
-    device_path = os.path.join(current_dir, f"devices/{device}")
+    device_path = os.path.join(current_dir, f"devices\\{device}")
     script_path = os.path.join(device_path, "teltonika.py")
     print(script_path, flush=True)
+
+    crash_lines = deque(maxlen=50)
+    error = False
+    traceback = False
 
     #VALID IP CHECK
     if valid_ip == False:
@@ -142,686 +173,398 @@ def run_main_script(airport, gate, temp_pass, device):
         return
     
     #RUN AUTOMATION SCRIPT
-    print("Running teltonika.py...", flush=True)
-    process = subprocess.Popen([sys.executable, script_path, str(gate_ip), str(gate_netmask), str(gate_gateway), str(temp_pass)], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
 
+    if not os.path.isfile(script_path):
+        raise FileNotFoundError(f"Script not found: {script_path}")
+    print("Running teltonika.py...", flush=True)
+
+    process = subprocess.Popen([sys.executable, script_path, str(gate_ip), str(gate_netmask), str(gate_gateway), str(temp_pass)], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+    for line in process.stdout:
+        print(line, end="")
+
+    process.wait()
+    excel = os.path.join(device_path, airport)
+    airport = airport.removesuffix(".xlsx")
+    print(excel, flush=True)
+
+    run_test_script(device_path, device, airport, excel, gate)
+    
     # Read output line-by-line in real time
     with process.stdout: # type: ignore
         for line in process.stdout: # type: ignore
-            print(line, end="")  # already has newline
+            statement = line.strip()
+            crash_lines.append(statement)
 
-    # Wait for process to finish
-    exit_code = process.wait()
-
-    print(f"teltonika.py finished with exit code {exit_code}", flush=True)
-
-    if exit_code != 0:
-        print("Error: teltonika.py failed", flush=True)
-            
             #####################  NON-TRACEBACK ERROR HANDLING #####################
             
-        #     if "Incorrect" in statement:
-        #         error = True
-        #         try:
-        #             crash_log = "\n".join(crash_lines)
-        #             timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        #             crash_folder = "crash_logs"
-        #             os.makedirs(crash_folder, exist_ok=True)
-        #             excel_name = excel.removesuffix(".xlsx") # type:ignore
+            if "Incorrect" in line:
+                error = True
+                try:
+                    crash_log = "\n".join(crash_lines)
+                    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                    crash_folder = "crash_logs"
+                    os.makedirs(crash_folder, exist_ok=True)
+                    # excel_name = excel.removesuffix(".xlsx") # type:ignore
+                    excel_name = airport
+                    print("Airport: ", airport, flush=True)
+                    filename_crash = f"crash_log_{excel_name}_{gate}_{timestamp}.txt"
+                    filepath = os.path.join(crash_folder, filename_crash)
 
-        #             filename_crash = f"crash_log_{excel_name}_{gate}_{timestamp}.txt"
-        #             filepath = os.path.join(crash_folder, filename_crash)
-
-        #             with open(filepath, "w") as file:
-        #                 file.write(crash_log)
-        #             wb = openpyxl.load_workbook(excel)
-        #             sheet = wb.active
+                    with open(filepath, "w") as file:
+                        file.write(crash_log)
+                    wb = openpyxl.load_workbook(excel)
+                    sheet = wb.active
                     
-        #             to_find = gate
-        #             found = False
+                    to_find = gate
+                    found = False
                     
-        #             current_datetime = datetime.now()
+                    current_datetime = datetime.now()
                     
-        #             for row in sheet.iter_rows(values_only=False):
-        #                 for cell in row:
-        #                     if str(cell.value) == to_find:
-        #                         print("Crash Log")
-        #                         t_row = cell.row
-        #                         t_col = cell.column
-        #                         file_path_crash = os.path.abspath(f"C:/Users/admin/Documents/teltonika/crash_logs/{filename_crash}") 
-        #                         cell = sheet.cell(row=t_row, column=10)
-        #                         cell.value = filename_crash
-        #                         cell.hyperlink = file_path_crash
-        #                         cell.font = Font(color="0000FF", underline="single")
+                    if sheet is None:
+                        return print("excel not found", flush=True)
+                    for row in sheet.iter_rows(values_only=False):
+                        for cell in row:
+                            if str(cell.value) == to_find:
+                                print("Crash Log")
+                                t_row = cell.row
+                                t_col = cell.column
+                                file_path_crash = os.path.abspath(os.path.join(device_path, f"crash_logs/{filename_crash}")) 
+                                cell = sheet.cell(row=t_row, column=10) # type:ignore
+                                cell.value = filename_crash
+                                cell.hyperlink = file_path_crash
+                                cell.font = Font(color="0000FF", underline="single")
                                 
-        #                         print("Red Date and Time")
-        #                         t_cell = sheet.cell(row=t_row, column=8)
-        #                         t_cell.value = current_datetime
-        #                         t_cell.font = Font(color="FF0000")
+                                print("Read Date and Time")
+                                t_cell = sheet.cell(row=t_row, column=8) # type:ignore
+                                t_cell.value = current_datetime
+                                t_cell.font = Font(color="FF0000")
                                 
-        #                         found = True
-        #                 if found:
-        #                     break
+                                found = True
+                        if found:
+                            break
                     
-        #             if not found:
-        #                 print("Error Couldn't be Logged")
+                    if not found:
+                        print("Error Couldn't be Logged")
                     
-        #             wb.save(excel)
+                    wb.save(excel)
                     
-        #             current_datetime = datetime.now()
+                    current_datetime = datetime.now()
                 
-        #         except Exception as e:
-        #             print(f"An Error Occurred: {e}")
-                
-        #         #create label text file
-        #         try:
-        #             print("Creating Label")
-        #             label_log = " "
+                except Exception as e:
+                    print(f"An Error Occurred: {e}")
+            
+                #create label text file
+                try:
+                    print("Creating Label")
+                    label_log = " "
                     
-        #             timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        #             router_labels = "router_labels"
-        #             os.makedirs(router_labels, exist_ok=True)
-        #             excel_name = excel.removesuffix(".xlsx")
+                    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                    router_labels = "router_labels"
+                    os.makedirs(router_labels, exist_ok=True)
+                    excel_name = airport
 
-        #             filename_label = f"label_{excel_name}_{gate}_{timestamp}.txt"
-        #             filepath = os.path.join(router_labels, filename_label)
+                    filename_label = f"label_{airport}_{gate}_{timestamp}.txt"
+                    filepath = os.path.join(router_labels, filename_label)
 
-        #             wb = openpyxl.load_workbook(excel)
-        #             sheet = wb.active
+                    wb = openpyxl.load_workbook(excel)
+                    
+                    to_find = gate
+                    found = False
                             
-        #             to_find = gate
-        #             found = False
-                            
-        #             for row in sheet.iter_rows(values_only=False):
-        #                 for cell in row:
-        #                     if str(cell.value) == to_find:
-        #                         print("Collecting Label Info")
-        #                         t_row = cell.row
-        #                         t_col = cell.column
-        #                         bridge_serial = sheet.cell(row=t_row, column=t_col).value
-        #                         router_num = sheet.cell(row=t_row, column=6).value
-        #                         mac_addr = sheet.cell(row=t_row, column=7).value
-        #                         gate_num = sheet.cell(row=t_row, column=1).value
+                    for row in sheet.iter_rows(values_only=False): # type: ignore
+                        for cell in row:
+                            if str(cell.value) == to_find:
+                                print("Collecting Label Info")
+                                t_row = cell.row
+                                t_col = cell.column
+                                bridge_serial = sheet.cell(row=t_row, column=t_col).value # type: ignore
+                                router_num = sheet.cell(row=t_row, column=6).value # type: ignore
+                                mac_addr = sheet.cell(row=t_row, column=7).value # type: ignore
+                                gate_num = sheet.cell(row=t_row, column=1).value # type: ignore
                                 
-        #                         print("Bridge Serial: ", bridge_serial)
-        #                         print("Router Num: ", router_num)
-        #                         print("Mac_addr: ", mac_addr)
-        #                         print("Gate Num: ", mac_addr)
+                                print("Bridge Serial: ", bridge_serial)
+                                print("Router Num: ", router_num)
+                                print("Mac_addr: ", mac_addr)
+                                print("Gate Num: ", mac_addr)
                                 
-        #                         found = True
-        #                 if found:
-        #                     break
+                                found = True
+                        if found:
+                            break
                         
-        #             if not found:
-        #                 print("Traceback Error Couldn't be Logged")
+                    if not found:
+                        print("Traceback Error Couldn't be Logged")
                             
-        #             wb.save(excel)
-        #             print(filepath, flush=True)
-        #             print(filepath)
-        #             with open(filepath, "w") as file:
-        #                 print("Writing Label Info")
-        #                 first_line = "GATE " + str(gate_num) +" SN" + str(bridge_serial) + "," + "PN: " + str(router_num) + "," + "MA: " + str(mac_addr) + "," + "IP: " + str(gate_ip)
-        #                 # second_line = "PN: " + str(router_num) + ","
-        #                 # third_line = "MA: " + str(mac_addr) + ","
-        #                 # fourth_line = "IP: " + str(gate_ip) + ","
-        #                 file.write(first_line)
-        #                 # file.write(second_line)
-        #                 # file.write(third_line)
-        #                 # file.write(fourth_line)
+                    wb.save(excel)
+                    print(filepath, flush=True)
+                    print(filepath)
+                    with open(filepath, "w") as file:
+                        print("Writing Label Info")
+                        first_line = "GATE " + str(gate_num) +" SN" + str(bridge_serial) + "," + "PN: " + str(router_num) + "," + "MA: " + str(mac_addr) + "," + "IP: " + str(gate_ip) # type:ignore
+                        # second_line = "PN: " + str(router_num) + ","
+                        # third_line = "MA: " + str(mac_addr) + ","
+                        # fourth_line = "IP: " + str(gate_ip) + ","
+                        file.write(first_line)
+                        # file.write(second_line)
+                        # file.write(third_line)
+                        # file.write(fourth_line)
                         
-        #             with open(filepath, "r") as file:
-        #                 print("Label File Contents")
-        #                 print(file.read())
-                        
+                    with open(filepath, "r") as file:
+                        print("Label File Contents")
+                        print(file.read())
                     
-        #             wb = openpyxl.load_workbook(excel)
-        #             sheet = wb.active
+                    wb = openpyxl.load_workbook(excel)
+                    sheet = wb.active
                             
-        #             to_find = gate
-        #             found = False
+                    to_find = gate
+                    found = False
                             
-        #             for row in sheet.iter_rows(values_only=False):
-        #                 for cell in row:
-        #                     if str(cell.value) == to_find:
-        #                         t_row = cell.row
-        #                         t_col = cell.column
-        #                         file_path_label = os.path.abspath(f"C:/Users/admin/Documents/teltonika/router_labels/{filename_label}") 
+                    for row in sheet.iter_rows(values_only=False): # type: ignore
+                        for cell in row:
+                            if str(cell.value) == to_find:
+                                t_row = cell.row
+                                t_col = cell.column
+                                file_path_label = os.path.abspath(os.path.join(device_path, f"router_labels/{filename_label}"))
                                 
-        #                         #Label
-        #                         cell = sheet.cell(row=t_row, column=9)
-        #                         cell.value = filename_label
-        #                         cell.hyperlink = file_path_label
-        #                         cell.font = Font(color="0000FF", underline="single")
+                                #Label
+                                cell = sheet.cell(row=t_row, column=9) # type: ignore
+                                cell.value = filename_label
+                                cell.hyperlink = file_path_label
+                                cell.font = Font(color="0000FF", underline="single")
                                 
-        #                         #Program Number
-        #                         cell = sheet.cell(row=t_row, column=11)
-        #                         if cell.value is None:
-        #                             cell.value = int(1)
-        #                         else:
-        #                             cell.value = cell.value + 1
-        #                         cell.font = Font(color="000000")
+                                #Program Number
+                                cell = sheet.cell(row=t_row, column=11) # type: ignore
+                                if cell.value is None:
+                                    cell.value = int(1)
+                                else:
+                                    cell.value = cell.value + 1
+                                cell.font = Font(color="000000")
                                 
-        #                         cell = sheet.cell(row=t_row, column=11)
-        #                         cell.value = "Not Tested"
-        #                         cell.font = Font(color="000000")
+                                cell = sheet.cell(row=t_row, column=11) # type: ignore
+                                cell.value = "Not Tested"
+                                cell.font = Font(color="000000")
                                 
-        #                         found = True
-        #                 if found:
-        #                     break
+                                found = True
+                        if found:
+                            break
                             
-        #             if not found:
-        #                 print("Label File Couldn't be Logged")
+                    if not found:
+                        print("Label File Couldn't be Logged")
                             
-        #             wb.save(excel)
+                    wb.save(excel)
 
-        #         except Exception as e:
-        #             print(f"An Error Occurred: {e}")
+                except Exception as e:
+                    print(f"An Error Occurred 1: {e}")
                 
-        #         #OSHKOSH LOG
-        #         oshkosh_log_path = "oshkosh_log.xlsx"
-        
-        #         wb = openpyxl.load_workbook(oshkosh_log_path)
-        #         sheet = wb.active
-                            
-        #         to_find = gate
-        #         found = False
+            if "Traceback" in statement:
+                traceback = True
+
+            if "MAC Addr:" in statement:
+                mac_addr = statement.split("MAC Addr:")[1].strip()
                 
-        #         #check for next empty row   
-        #         for row_index, row in enumerate(sheet.iter_rows(min_col=1, max_col=1, values_only=True), start=1):
-        #             if row[0] is None:
-        #                 target_row = row_index
-        #                 found = True
-        #                 break
-
-        #         if found:
-        #             #Airport
-        #             print("Airport Log")
-        #             airport_cell = sheet.cell(row=target_row, column=1)
-        #             airport_cell.value = excel
-        #             airport_cell.font = Font(color="000000")
-                    
-        #             #Gate
-        #             print("Gate Log")
-        #             gate_cell = sheet.cell(row=target_row, column=2)
-        #             gate_cell.value = int(gate)
-        #             gate_cell.font = Font(color="000000")
-                    
-        #             #Gate IP
-        #             print("Gate IP Log")
-        #             gate_ip_cell = sheet.cell(row=target_row, column=3)
-        #             gate_ip_cell.value = gate_ip
-        #             gate_ip_cell.font = Font(color="000000")
-                    
-        #             #Gate Netmask
-        #             print("Gate Netmask")
-        #             netmask_cell = sheet.cell(row=target_row, column=4)
-        #             netmask_cell.value = gate_netmask
-        #             netmask_cell.font = Font(color="000000")
-                    
-        #             #Gate Gateway
-        #             print("Gateway")
-        #             gateway_cell = sheet.cell(row=target_row, column=5)
-        #             gateway_cell.value = gate_gateway
-        #             gateway_cell.font = Font(color="000000")
-                    
-        #             #Bridge Serial
-        #             print("Bridge Serial Log: ", bridge_serial)
-        #             bridge_cell = sheet.cell(row=target_row, column=6)
-        #             bridge_cell.value = bridge_serial
-        #             bridge_cell.font = Font(color="000000")
-
-        #             #Router Number
-        #             print("Router Number Log")
-        #             router_cell = sheet.cell(row=target_row, column=7)
-        #             router_cell.value = router_num
-        #             router_cell.font = Font(color="000000")
-                    
-        #             #Mac Addr
-        #             print("Mac Addr Log")
-        #             mac_cell = sheet.cell(row=target_row, column=8)
-        #             mac_cell.value = mac_addr
-        #             mac_cell.font = Font(color="000000")
-                    
-        #             #Router Program Date
-        #             print("Timestamp Log")
-        #             if error is True or traceback is True:
-        #                 timestamp_cell = sheet.cell(row=target_row, column=9)
-        #                 timestamp_cell.value = current_datetime
-        #                 timestamp_cell.font = Font(color="FF0000")
-        #             else:
-        #                 timestamp_cell = sheet.cell(row=target_row, column=9)
-        #                 timestamp_cell.value = current_datetime
-        #                 timestamp_cell.font = Font(color="000000")
-                    
-        #             #Label
-        #             print("Label Log")
-        #             label_cell = sheet.cell(row=target_row, column=10)
-        #             file_path_label = os.path.abspath(f"C:/Users/admin/Documents/teltonika/router_labels/{filename_label}") 
-        #             label_cell.value = filename_label
-        #             label_cell.hyperlink = file_path_label
-        #             label_cell.font = Font(color="0000FF", underline="single")
-                    
-        #             #Crash Report
-        #             print("Crash Log")
-        #             crash_cell = sheet.cell(row=target_row, column=11)
-        #             file_path_crash = os.path.abspath(f"C:/Users/admin/Documents/teltonika/crash_logs/{filename_crash}") 
-        #             crash_cell.value = filename_crash
-        #             crash_cell.hyperlink = file_path_crash
-        #             crash_cell.font = Font(color="0000FF", underline="single")
-                    
-        #             #Test is Not Done Yet so we set it None
-        #             testdate_cell = sheet.cell(row=t_row, column=t_col + 12)
-        #             testdate_cell.value = "Not Tested"
-        #             testdate_cell.font = Font(color="000000")
-                        
-        #         if not found:
-        #             print("Oshkosh Log: Info Couldn't be Logged")
-                            
-        #         wb.save(oshkosh_log_path)
-
-        #         #Exit Main Script
-        #         return
-                    
-        #     if "Traceback" in statement:
-        #         traceback = True
-
-        #     if "MAC Addr:" in statement:
-        #         mac_addr = statement.split("MAC Addr:")[1].strip()
+                print("MAC Address: ", mac_addr)
                 
-        #         print("MAC Address: ", mac_addr)
-                
-        #         try:
-        #             wb = openpyxl.load_workbook(excel)
-        #             sheet = wb.active
+                try:
+                    wb = openpyxl.load_workbook(excel)
+                    sheet = wb.active
                     
-        #             to_find = gate
-        #             found = False
+                    to_find = gate
+                    found = False
                     
-        #             for row in sheet.iter_rows(values_only=False):
-        #                 for cell in row:
-        #                     if str(cell.value) == to_find:
-        #                         t_row = cell.row
-        #                         t_col = cell.column
+                    for row in sheet.iter_rows(values_only=False): # type:ignore
+                        for cell in row:
+                            if str(cell.value) == to_find:
+                                t_row = cell.row
+                                t_col = cell.column
                                 
-        #                         t_cell = sheet.cell(row=t_row, column=7)
-        #                         t_cell.value = mac_addr
-        #                         t_cell.font = Font(color="000000")
+                                t_cell = sheet.cell(row=t_row, column=7) # type:ignore
+                                t_cell.value = mac_addr
+                                t_cell.font = Font(color="000000")
 
-        #                         found = True
-        #                 if found:
-        #                     break
+                                found = True
+                        if found:
+                            break
                     
-        #             if not found:
-        #                 print("Mac Address Couldn't be Logged")
+                    if not found:
+                        print("Mac Address Couldn't be Logged")
                     
-        #             wb.save(excel)
+                    wb.save(excel)
                     
-        #         except Exception as e:
-        #             print(f"An Error Occurred: {e}")
+                except Exception as e:
+                    print(f"An Error Occurred 2: {e}")
                 
         # #end of automation python file
         # process.wait()
         
         ################### Traceback File Creation and Logging #####################
         
-#         current_datetime = datetime.now()
+        current_datetime = datetime.now()
         
-#         if traceback is True:
-#             try:
-#                 crash_log = "\n".join(crash_lines)
+        if traceback is True:
+            try:
+                crash_log = "\n".join(crash_lines)
                     
-#                 timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-#                 crash_folder = "crash_logs"
-#                 os.makedirs(crash_folder, exist_ok=True)
-#                 excel_name = excel.removesuffix(".xlsx")
+                timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                crash_folder = "crash_logs"
+                os.makedirs(crash_folder, exist_ok=True)
+                excel_name = excel.removesuffix(".xlsx")
+                print("airport ", airport)
 
-#                 filename_crash = f"crash_log_{excel_name}_{gate}_{timestamp}.txt"
-#                 filepath = os.path.join(crash_folder, filename_crash)
+                filename_crash = f"crash_log_2_{airport}_{gate}_{timestamp}.txt"
+                filepath = os.path.join(crash_folder, filename_crash)
 
-#                 with open(filepath, "w") as file:
-#                     file.write(crash_log)
+                with open(filepath, "w") as file:
+                    file.write(crash_log)
                     
-#                 wb = openpyxl.load_workbook(excel)
-#                 sheet = wb.active
+                wb = openpyxl.load_workbook(excel)
+                sheet = wb.active
                     
-#                 to_find = gate
-#                 found = False
+                to_find = gate
+                found = False
                     
-#                 for row in sheet.iter_rows(values_only=False):
-#                     for cell in row:
-#                         if str(cell.value) == to_find:
-#                             t_row = cell.row
-#                             t_col = cell.column
-#                             file_path_crash = os.path.abspath(f"C:/Users/admin/Documents/teltonika/crash_logs/{filename_crash}") 
-#                             cell = sheet.cell(row=t_row, column=10)
-#                             cell.value = filename_crash
-#                             cell.hyperlink = file_path_crash
-#                             cell.font = Font(color="0000FF", underline="single")
+                for row in sheet.iter_rows(values_only=False): # type:ignore
+                    for cell in row:
+                        if str(cell.value) == to_find:
+                            t_row = cell.row
+                            t_col = cell.column
+                            file_path_crash = os.path.abspath(f"crash_logs/{filename_crash}")
+                            cell = sheet.cell(row=t_row, column=10) # type:ignore
+                            cell.value = filename_crash
+                            cell.hyperlink = file_path_crash
+                            cell.font = Font(color="0000FF", underline="single")
                                 
-#                             found = True
-#                     if found:
-#                         break
+                            found = True
+                    if found:
+                        break
                     
-#                 if not found:
-#                     print("Traceback Error Couldn't be Logged")
+                if not found:
+                    print("Traceback Error Couldn't be Logged")
                     
-#                 wb.save(excel)
+                wb.save(excel)
 
-#             except Exception as e:
-#                 print(f"An Error Occurred: {e}")
+            except Exception as e:
+                print(f"An Error Occurred 3: {e}")
         
-#         ########################## ADD TIMESTAMP ############################
+        ########################## ADD TIMESTAMP ############################
         
-#         current_datetime = datetime.now()
+        current_datetime = datetime.now()
         
-#         try:
-#             wb = openpyxl.load_workbook(excel)
-#             sheet = wb.active
+        try:
+            wb = openpyxl.load_workbook(excel)
+            sheet = wb.active
             
-#             to_find = gate
-#             print("selected excel", excel)
-#             print("selected gate", gate)
-#             found = False
+            to_find = gate
+            print("selected excel", excel)
+            print("selected gate", gate)
+            found = False
             
-#             for row in sheet.iter_rows(values_only=False):
-#                 for cell in row:
-#                     if str(cell.value) == to_find:
-#                         t_row = cell.row
-#                         t_col = cell.column
-#                         print("row:", t_row)
-#                         print("col:", t_col)
-#                         print("Error Value: ", error)
+            for row in sheet.iter_rows(values_only=False): # type:ignore
+                for cell in row:
+                    if str(cell.value) == to_find:
+                        t_row = cell.row
+                        t_col = cell.column
+                        print("row:", t_row)
+                        print("col:", t_col)
+                        print("Error Value: ", error)
                         
-#                         #change date time color to red
-#                         if error is True or traceback is True:
-#                             print("inside here for some reason")
-#                             t_cell = sheet.cell(row=t_row, column=8)
-#                             t_cell.value = current_datetime
-#                             t_cell.font = Font(color="FF0000")
+                        #change date time color to red
+                        if error is True or traceback is True:
+                            t_cell = sheet.cell(row=t_row, column=8)# type:ignore
+                            t_cell.value = current_datetime
+                            t_cell.font = Font(color="FF0000")
                         
-#                         #date time color to black
-#                         else:
-#                             print("correct spot")
-#                             t_cell = sheet.cell(row=t_row, column=8)
-#                             t_cell.value = current_datetime
-#                             t_cell.font = Font(color="000000")
+                        #date time color to black
+                        else:
+                            print("correct spot")
+                            t_cell = sheet.cell(row=t_row, column=8) # type:ignore
+                            t_cell.value = current_datetime
+                            t_cell.font = Font(color="000000")
                             
-#                             print("Trying to Remove Crash Log File")
+                            print("Trying to Remove Crash Log File")
 
-#                             #remove the crash file if it exists
-#                             t_cell = sheet.cell(row=t_row, column=10)
-#                             print(t_cell.value)
-#                             t_cell.value = " "
+                            #remove the crash file if it exists
+                            t_cell = sheet.cell(row=t_row, column=10) # type:ignore
+                            print(t_cell.value)
+                            t_cell.value = " "
 
-#                         found = True
-#                 if found:
-#                     break
+                        found = True
+                if found:
+                    break
             
-#             if not found:
-#                 print("Date and Time Couldn't be Logged")
+            if not found:
+                print("Date and Time Couldn't be Logged")
             
-#             wb.save(excel)
+            wb.save(excel)
             
-#         except Exception as e:
-#             print(f"An Error Occurred: {e}")
+        except Exception as e:
+            print(f"An Error Occurred 4: {e}")
             
-#         ########################## CREATE A LABEL ##########################
-#         try:
-#             print("Creating Label")            
-#             timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-#             router_labels = "router_labels"
-#             os.makedirs(router_labels, exist_ok=True)
-#             excel_name = excel.removesuffix(".xlsx")
+        ########################## CREATE A LABEL ##########################
+        try:
+            print("Creating Label")            
+            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            router_labels = "router_labels"
+            os.makedirs(router_labels, exist_ok=True)
+            excel_name = excel.removesuffix(".xlsx")
 
-#             filename_label = f"label_{excel_name}_{gate}_{timestamp}.txt"
-#             filepath = os.path.join(router_labels, filename_label)
+            filename_label = f"labe2l_{airport}_{gate}_{timestamp}.txt"
+            filepath = os.path.join(router_labels, filename_label)
 
-#             wb = openpyxl.load_workbook(excel)
-#             sheet = wb.active
+            wb = openpyxl.load_workbook(excel)
+            sheet = wb.active
                     
-#             to_find = gate
-#             found = False
+            to_find = gate
+            found = False
                     
-#             for row in sheet.iter_rows(values_only=False):
-#                 for cell in row:
-#                     if str(cell.value) == to_find:
-#                         print("Collecting Label Info")
-#                         t_row = cell.row
-#                         t_col = cell.column
+            for row in sheet.iter_rows(values_only=False): # type:ignore
+                for cell in row:
+                    if str(cell.value) == to_find:
+                        print("Collecting Label Info")
+                        t_row = cell.row
+                        t_col = cell.column
 
-#                         bridge_serial = sheet.cell(row=t_row, column=t_col).value
-#                         router_num = sheet.cell(row=t_row, column=6).value
-#                         mac_addr = sheet.cell(row=t_row, column=7).value
-#                         gate_num = sheet.cell(row=t_row, column=1).value
+                        bridge_serial = sheet.cell(row=t_row, column=t_col).value # type:ignore
+                        router_num = sheet.cell(row=t_row, column=6).value# type:ignore
+                        mac_addr = sheet.cell(row=t_row, column=7).value# type:ignore
+                        gate_num = sheet.cell(row=t_row, column=1).value# type:ignore
                                 
-#                         print("Bridge Serial: ", bridge_serial)
-#                         print("Router Num: ", router_num)
-#                         print("Mac_addr: ", mac_addr)
-#                         print("Gate Num: ", mac_addr)
-#                         mac_addr = str(mac_addr)
+                        print("Bridge Serial: ", bridge_serial)
+                        print("Router Num: ", router_num)
+                        print("Mac_addr: ", mac_addr)
+                        print("Gate Num: ", gate_num)
+                        mac_addr = str(mac_addr)
                         
-#                         found = True
-#                 if found:
-#                     break
-#             if not found:
-#                 print("Error Couldn't be Logged")
+                        found = True
+                if found:
+                    break
+            if not found:
+                print("Error Couldn't be Logged")
                     
-#             wb.save(excel)
+            wb.save(excel)
             
-#             with open(filepath, "w") as file:
-#                 print("Writing Label Info")
-#                 first_line = "GATE " + str(gate_num) +" SN" + str(bridge_serial) + ","
-#                 second_line = "PN: " + str(router_num) + ","
-#                 third_line = "MA: " + str(mac_addr) + ","
-#                 fourth_line = "IP: " + str(gate_ip) + ","
-#                 file.write(first_line)
-#                 file.write(second_line)
-#                 file.write(third_line)
-#                 file.write(fourth_line)
+            with open(filepath, "w") as file:
+                print("Writing Label Info")
+                first_line = "GATE " + str(gate_num) +" SN" + str(bridge_serial) + "," # type:ignore
+                second_line = "PN: " + str(router_num) + "," # type:ignore
+                third_line = "MA: " + str(mac_addr) + "," # type:ignore
+                fourth_line = "IP: " + str(gate_ip) + "," # type:ignore
+                file.write(first_line)
+                file.write(second_line)
+                file.write(third_line)
+                file.write(fourth_line)
                 
-#             with open(filepath, "r") as file:
-#                 print("Label File Contents")
-#                 print(file.read())
+            with open(filepath, "r") as file:
+                print("Label File Contents")
+                print(file.read())
+                print("Programming and Testing Complete.")
+                print("Saving log file...")
+                print("Device programming complete. Continue to next Device.")
+                sys.exit(0)
                 
-            
-#             wb = openpyxl.load_workbook(excel)
-#             sheet = wb.active
-                    
-#             to_find = gate
-#             found = False
-                    
-#             for row in sheet.iter_rows(values_only=False):
-#                 for cell in row:
-#                     if str(cell.value) == to_find:
-#                         t_row = cell.row
-#                         t_col = cell.column
-#                         file_path_label = os.path.abspath(f"C:/Users/admin/Documents/teltonika/router_labels/{filename_label}")
-                        
-#                         #Label 
-#                         cell = sheet.cell(row=t_row, column=9)
-#                         cell.value = filename_label
-#                         cell.hyperlink = file_path_label
-#                         cell.font = Font(color="0000FF", underline="single")
-                        
-#                         #Program Number
-#                         cell = sheet.cell(row=t_row, column=11)
-#                         if cell.value is None:
-#                             cell.value = int(1)
-#                         else:
-#                             cell.value = cell.value + 1
-#                         cell.font = Font(color="000000")
-                        
-#                         #Test is Not Done Yet so we set it None
-#                         cell = sheet.cell(row=t_row, column=11)
-#                         cell.value = "Not Tested"
-#                         cell.font = Font(color="000000")
-                                
-#                         found = True
-#                 if found:
-#                     break
-                    
-#             if not found:
-#                 print("Error Couldn't be Logged")
-                    
-#             wb.save(excel)
+        except Exception as e:
+            print(f"An Error Occurred: {e}")
 
-#         except Exception as e:
-#             print(f"An Error Occurred: {e}")
-                
-#         ################################### OSHKOSH LOG #####################################
-        
-#         oshkosh_log_path = "oshkosh_log.xlsx"
-        
-#         wb = openpyxl.load_workbook(oshkosh_log_path)
-#         sheet = wb.active
-                    
-#         to_find = gate
-#         found = False
-        
-#         #check for next empty row   
-#         for row_index, row in enumerate(sheet.iter_rows(min_col=1, max_col=1, values_only=True), start=1):
-#             if row[0] is None:
-#                 target_row = row_index
-#                 found = True
-#                 break
-
-#         if found:
-#             #Airport
-#             print("Airport Log")
-#             airport_cell = sheet.cell(row=target_row, column=1)
-#             airport_cell.value = excel
-#             airport_cell.font = Font(color="000000")
-            
-#             #Gate
-#             print("Gate Log")
-#             gate_cell = sheet.cell(row=target_row, column=2)
-#             gate_cell.value = int(gate)
-#             gate_cell.font = Font(color="000000")
-            
-#             #Gate IP
-#             print("Gate IP Log")
-#             gate_ip_cell = sheet.cell(row=target_row, column=3)
-#             gate_ip_cell.value = gate_ip
-#             gate_ip_cell.font = Font(color="000000")
-            
-#             #Gate Netmask
-#             print("Gate Netmask")
-#             netmask_cell = sheet.cell(row=target_row, column=4)
-#             netmask_cell.value = gate_netmask
-#             netmask_cell.font = Font(color="000000")
-                    
-#             #Gate Gateway
-#             print("Gateway")
-#             gateway_cell = sheet.cell(row=target_row, column=5)
-#             gateway_cell.value = gate_gateway
-#             gateway_cell.font = Font(color="000000")
-            
-#             #Bridge Serial
-#             print("Bridge Serial Log: ", bridge_serial)
-#             bridge_cell = sheet.cell(row=target_row, column=6)
-#             bridge_cell.value = bridge_serial
-#             bridge_cell.font = Font(color="000000")
-
-#             #Router Number
-#             print("Router Number Log")
-#             router_cell = sheet.cell(row=target_row, column=7)
-#             router_cell.value = router_num
-#             router_cell.font = Font(color="000000")
-            
-#             #Mac Addr
-#             print("Mac Addr Log")
-#             mac_cell = sheet.cell(row=target_row, column=8)
-#             mac_cell.value = mac_addr
-#             mac_cell.font = Font(color="000000")
-            
-#             #Router Program Date
-#             print("Timestamp Log")
-#             if error is True or traceback is True:
-#                 timestamp_cell = sheet.cell(row=target_row, column=9)
-#                 timestamp_cell.value = current_datetime
-#                 timestamp_cell.font = Font(color="FF0000")
-#             else:
-#                 timestamp_cell = sheet.cell(row=target_row, column=9)
-#                 timestamp_cell.value = current_datetime
-#                 timestamp_cell.font = Font(color="000000")
-            
-#             #Label
-#             print("Label Log")
-#             label_cell = sheet.cell(row=target_row, column=10)
-#             file_path_label = os.path.abspath(f"C:/Users/admin/Documents/teltonika/router_labels/{filename_label}") 
-#             label_cell.value = filename_label
-#             label_cell.hyperlink = file_path_label
-#             label_cell.font = Font(color="0000FF", underline="single")
-            
-#             #Crash Report
-#             if error is True or traceback is True:
-#                 print("Crash Log")
-#                 crash_cell = sheet.cell(row=target_row, column=11)
-#                 file_path_crash = os.path.abspath(f"C:/Users/admin/Documents/teltonika/crash_logs/{filename_crash}") 
-#                 crash_cell.value = filename_crash
-#                 crash_cell.hyperlink = file_path_crash
-#                 crash_cell.font = Font(color="0000FF", underline="single")
-            
-#             #Router Test Data Blank
-#             print("Router Test Data Blank")
-#             mac_cell = sheet.cell(row=target_row, column=12)
-#             mac_cell.value = "Not Tested"
-#             mac_cell.font = Font(color="000000")
-                    
-#         if not found:
-#             print("Oshkosh Log: Info Couldn't be Logged")
-                    
-#         wb.save(oshkosh_log_path)
-        
-#         #################################################################################
-        
-#     except Exception as e:
-#         print(f"Failed to Run Script: {e}")
-        
-#     start_button.config(state='normal')
-    
-#     threading.Thread(target=run_test_script, daemon=True).start()
-
-# def start():
-#     start_button.config(state='disabled')
-#     threading.Thread(target=run_main_script, daemon=True).start()
-
-# #Start Button
-# start_button = tk.Button(check_frame, text="Start", command=start)
-# start_button.grid(row=1, column=3, sticky='n')
-
-# ############## Column 4 Test Prints ##############
-# test_frame = tk.Frame(root)
-# test_frame.grid(row=0, column=4, sticky='n')
-
-# tk.Label(test_frame, text='test').grid(row=0, column=4)
-# test_output = tk.Text(test_frame, height=10, width=15, state='disabled')
-# test_output.grid(row=0, column=4, sticky='n')
-
-# def test_text(text):
-#     test_output.config(state='normal')
-#     test_output.insert(tk.END, text + "\n")
-#     test_output.see(tk.END)
-#     test_output.config(state='disabled')
-
-# ############## Column 5 Log Prints ##############
-# log_frame = tk.Frame(root)
-# log_frame.grid(row=0, column=5, sticky='n')
-
-# tk.Label(log_frame, text='print Search').grid(row=0, column=5)
-# log_output = tk.Text(log_frame, height=10, width=40, state='disabled')
-# log_output.grid(row=0, column=5, sticky='n')
-
-# def print(text):
-#     log_output.config(state='normal')
-#     log_output.insert(tk.END, text + "\n")
-#     log_output.see(tk.END)
-#     log_output.config(state='disabled')
-    
-################################################ TEST SCRIPT ##############################################
-"""
-def run_test_script():
-    
+def run_test_script(device_path, device, airport, excel, gate):
+# def run_test_script():
     def ssh_bbb_connect():
         global ssh_bbb, sftp_bbb
         bbb_ip = '192.168.7.2'
@@ -882,6 +625,8 @@ def run_test_script():
     output4 = None
     test_error = None
     
+    lookup_excel(airport+".xlsx", gate, device)
+
     if valid_ip == False:
         print("Invalid IP!")
         print("Exiting Script!")
@@ -889,8 +634,23 @@ def run_test_script():
         return
     print("Copying Test File from Backup Folder")
 
-    source_folder = 'og_testfile'
-    destination_folder = 'testfile'
+    print("Getting router ip...", flush=True)
+    ssh_bbb_connect()
+    time.sleep(s_pause)
+    output = ssh_bbb_run("ip addr show eth0")
+    time.sleep(s_pause)
+
+    # Regex for IPV4
+    pattern_ipv4 = r'\b10.\d{1,3}\.\d{1,3}.123\b'
+    ipv4s = re.findall(pattern_ipv4, output)
+    print(ipv4s, flush=True)
+    # for addr in ipv4s:
+    #     if addr != "10.28.18.123":
+    #         print(f"Router already programmed to IP:{addr}", flush=True)
+    #         gate_ip = str(ipv4s[2])
+
+    source_folder = os.path.join(device_path, 'og_testfile')
+    destination_folder = os.path.join(device_path, 'testfile')
 
     os.makedirs(destination_folder, exist_ok=True)
 
@@ -904,28 +664,18 @@ def run_test_script():
     old_ip = "127.0.0.1"
     new_ip = str(gate_ip)
     print("new_ip: ", new_ip, flush=True)
-    # ### Set up the xx.123 path
-    # ip_parts = gate_ip.split(".")
-    # print("ip_parts: ", ip_parts)
-    # end_num = ip_parts[-1]
-    # if end_num == "123":
-    #     ip_parts[-1] = "100"
-    # else:
-    #     ip_parts[-1] = "123"
-    # new_ip = ".".join(ip_parts)
-    print(new_ip)
 
-    with open("C:/Users/admin/Documents/teltonika/testfile/FloodLighToggle.py", 'r') as file:
+    with open(os.path.join(device_path, f"testfile/FloodLighToggle.py"), 'r') as file:
         content = file.read()
         
     print("Replacing Old Gate Ip")
     time.sleep(1)
     updated_content = content.replace(old_ip, new_ip)
 
-    with open("C:/Users/admin/Documents/teltonika/testfile/FloodLighToggle.py", 'w') as file:
+    with open(os.path.join(device_path, f"testfile/FloodLighToggle.py"), 'w') as file:
         file.write(updated_content)
 
-    with open("C:/Users/admin/Documents/teltonika/testfile/FloodLighToggle.py", 'r') as file:
+    with open(os.path.join(device_path, f"testfile/FloodLighToggle.py"), 'r') as file:
         verify = file.read()
         if new_ip in verify:
             print("New Gate IP Updated")
@@ -942,7 +692,7 @@ def run_test_script():
     ssh_bbb_connect()
     print("Copying FloodLighToggle.py File to BBB")
     time.sleep(s_pause)
-    ssh_bbb_upload("testfile/FloodLighToggle.py", "/home/raj/FloodLighToggle.py")
+    ssh_bbb_upload(os.path.join(device_path, "testfile/FloodLighToggle.py"), "/home/raj/FloodLighToggle.py")
     time.sleep(s_pause)
 
     print("Verifying FloodLighToggle.py File Upload")
@@ -1026,7 +776,7 @@ def run_test_script():
         os.makedirs(crash_folder, exist_ok=True)
         excel_name = excel.removesuffix(".xlsx")
 
-        filename_crash = f"test_crash_log_{excel_name}_{gate}_{timestamp}.txt"
+        filename_crash = f"test_crash_log_{airport}_{gate}_{timestamp}.txt"
         filepath = os.path.join(crash_folder, filename_crash)
         
         with open(filepath, "w") as file:
@@ -1098,7 +848,7 @@ def run_test_script():
 
                         t_row = cell.row
                         t_col = cell.column
-                        file_path_crash = os.path.abspath(f"C:/Users/admin/Documents/teltonika/crash_logs/{filename_crash}") 
+                        file_path_crash = os.path.abspath(os.path.join(device_path, f"crash_logs/{filename_crash}")) 
                         cell = sheet.cell(row=t_row, column=13)
                         cell.value = filename_crash
                         cell.hyperlink = file_path_crash
@@ -1177,98 +927,7 @@ def run_test_script():
             
         except Exception as e:
             print(f"An Error Occurred: {e}")
-            
-    ############## OSHKOSH LOG #########################
-    
-    oshkosh_log_path = "oshkosh_log.xlsx"
-        
-    wb = openpyxl.load_workbook(oshkosh_log_path)
-    sheet = wb.active
-                    
-    to_find = gate
-    found = False
-        
-    #check for next empty row   
-    for row_index, row in enumerate(sheet.iter_rows(min_col=1, max_col=1, values_only=True), start=1):
-        if row[0] is None:
-            target_row = row_index
-            found = True
-            break
 
-    if found:
-        #Airport
-        print("Airport Log")
-        airport_cell = sheet.cell(row=target_row, column=1)
-        airport_cell.value = excel
-        airport_cell.font = Font(color="000000")
-            
-        #Gate
-        print("Gate Log")
-        gate_cell = sheet.cell(row=target_row, column=2)
-        gate_cell.value = int(gate)
-        gate_cell.font = Font(color="000000")
-            
-        #Gate IP
-        print("Gate IP Log")
-        gate_ip_cell = sheet.cell(row=target_row, column=3)
-        gate_ip_cell.value = gate_ip
-        gate_ip_cell.font = Font(color="000000")
-            
-        #Gate Netmask
-        print("Gate Netmask")
-        netmask_cell = sheet.cell(row=target_row, column=4)
-        netmask_cell.value = gate_netmask
-        netmask_cell.font = Font(color="000000")
-                    
-        #Gate Gateway
-        print("Gateway")
-        gateway_cell = sheet.cell(row=target_row, column=5)
-        gateway_cell.value = gate_gateway
-        gateway_cell.font = Font(color="000000")
-            
-        #Bridge Serial
-        print("Bridge Serial Log: ", bridge_serial)
-        bridge_cell = sheet.cell(row=target_row, column=6)
-        bridge_cell.value = bridge_serial
-        bridge_cell.font = Font(color="000000")
+end_time = time.perf_counter()
 
-        #Router Number
-        print("Router Number Log")
-        router_cell = sheet.cell(row=target_row, column=7)
-        router_cell.value = router_num
-        router_cell.font = Font(color="000000")
-            
-        #Mac Addr
-        print("Mac Addr Log")
-        mac_cell = sheet.cell(row=target_row, column=8)
-        mac_cell.value = mac_addr
-        mac_cell.font = Font(color="000000")
-            
-        #Router Test Date
-        print("Timestamp Log")
-        if test_error is True:
-            timestamp_cell = sheet.cell(row=target_row, column=12)
-            timestamp_cell.value = current_datetime
-            timestamp_cell.font = Font(color="FF0000")
-        else:
-            timestamp_cell = sheet.cell(row=target_row, column=12)
-            timestamp_cell.value = current_datetime
-            timestamp_cell.font = Font(color="000000")
-            
-        #Crash Report
-        if test_error is True:
-            print("Crash Log")
-            crash_cell = sheet.cell(row=target_row, column=13)
-            file_path_crash = os.path.abspath(f"C:/Users/admin/Documents/teltonika/crash_logs/{filename_crash}") 
-            crash_cell.value = filename_crash
-            crash_cell.hyperlink = file_path_crash
-            crash_cell.font = Font(color="0000FF", underline="single")
-                    
-    if not found:
-        print("Oshkosh Log: Info Couldn't be Logged")
-                    
-    wb.save(oshkosh_log_path)
-        
-    end_time = time.perf_counter()
-
-"""
+# """

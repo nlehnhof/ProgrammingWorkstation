@@ -1,0 +1,94 @@
+=== Application Log ===
+Run started: 2026-07-15_12-02-32
+----------------------------------------
+Registred Devices:
+['TR']
+Traceback (most recent call last):
+  File "C:\Users\u324754\programming_workstation\main.py", line 28, in <module>
+    main()
+  File "C:\Users\u324754\programming_workstation\main.py", line 22, in main
+    window = MainPage()
+             ^^^^^^^^^^
+  File "C:\Users\u324754\programming_workstation\pages\main_window.py", line 24, in __init__
+    self.prog_page = ProgramPage(self.stacked_widget)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\u324754\programming_workstation\pages\program_page.py", line 25, in __init__
+    self._init_ui()
+  File "C:\Users\u324754\programming_workstation\pages\program_page.py", line 85, in _init_ui
+    l_instr.setAlignment(Qt.AlignmentFLag.AlignCenter)
+                         ^^^^^^^^^^^^^^^^
+AttributeError: type object 'Qt' has no attribute 'AlignmentFLag'
+
+Traceback (most recent call last):
+File "C:\Users\u324754\programming_workstation\main.py", line 28, in <module>
+main()
+File "C:\Users\u324754\programming_workstation\main.py", line 22, in main
+window = MainPage()
+^
+^
+^
+^
+^
+^
+^
+^
+^
+^
+File "C:\Users\u324754\programming_workstation\pages\main_window.py", line 24, in __init__
+self.prog_page = ProgramPage(self.stacked_widget)
+^
+^
+^
+^
+^
+^
+^
+^
+^
+^
+^
+^
+^
+^
+^
+^
+^
+^
+^
+^
+^
+^
+^
+^
+^
+^
+^
+^
+^
+^
+^
+^
+File "C:\Users\u324754\programming_workstation\pages\program_page.py", line 25, in __init__
+self._init_ui()
+File "C:\Users\u324754\programming_workstation\pages\program_page.py", line 85, in _init_ui
+l_instr.setAlignment(Qt.AlignmentFLag.AlignCenter)
+^
+^
+^
+^
+^
+^
+^
+^
+^
+^
+^
+^
+^
+^
+^
+^
+AttributeError
+:
+type object 'Qt' has no attribute 'AlignmentFLag'
+----------------------------------------

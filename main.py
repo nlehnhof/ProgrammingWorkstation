@@ -3,10 +3,11 @@ import sys
 from PyQt5.QtWidgets import QApplication
 from pages.add_device_page import AddDevice
 from pages.program_page import ProgramPage
-from manager import DeviceManager
+from core.manager import DeviceManager
 from pages.home_page import HomePage
 from pages.main_window import MainPage
 from PyQt5.QtGui import QPalette, QColor, QFont
+import pages.error_log_page
 
 def main():
     app = QApplication(sys.argv)
