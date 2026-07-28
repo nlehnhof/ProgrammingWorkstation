@@ -49,18 +49,10 @@ def lookup_excel(sheet, gate):
                         gate_ip = row[idx - 3]
                         gate_netmask = row[idx - 2]
                         gate_gateway = row[idx - 1]
-                        if is_valid_ip(gate_ip):
-                            print(f"Gate IP: {gate_ip}")
-                            print(f"Netmask: {gate_netmask}")
-                            print(f"Gateway: {gate_gateway}")
-                        else:
-                            print(f"Invalid IP: {gate_ip}")
-                            print("Select Another Option")
-                            valid_ip = False
+                        print(f"Gate IP: {gate_ip}")
+                        print(f"Netmask: {gate_netmask}")
+                        print(f"Gateway: {gate_gateway}")
     except Exception as e:
         print(f"Error Reading File: {e}")
-
-    return [gate_ip, gate_netmask, gate_gateway]
-
     
 

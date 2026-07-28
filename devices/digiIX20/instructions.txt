@@ -1,0 +1,43 @@
+Instructions for Digi IX 20 router
+Default: 192.168.2.1/24 OR 192.168.210.1/24
+
+Setup:
+Connect IX20 to 9-30 V DC power source
+Connect IX20 to PC with Ethernet cable in ETH2 port
+
+Step 1: On PC, type network IP in browser and hit enter.
+If a warning pops up, click "Learn More" and "Continue".
+Step 2: Submit the default username and password.
+The username is 'admin' and the password is found on the back of the router.
+Step 3: Go to System -> Device Configuration
+Step 4: Go to Authentication -> Users -> admin
+Step 5: Type the new password 'Jetway@dm1n'
+Step 6: Navigate to Network -> Interfaces -> ETH2 (or the ETH port showing Zone as 'Internal')
+Step 7: Open IPv4 and set Type to 'Static IP address'
+Step 8: Write the gate ip address and default gateway to 'Address' and 'Default Gateway'.
+This information is found in the airport excel sheet. Make sure the address, gateway, and subnet are accurate to the airport and gate.
+Step 9: Click Apply and enter the default password.
+
+Router configuration is now complete.
+
+OR IN POWERSHELL
+
+Step 1: 'ssh admin@192.168.2.1'; input default password.
+Step 2: Select 'a' to move into the Admin CLI
+Step 3: type 'config' and hit enter
+Step 4: type 'auth user admin' and hit enter
+Step 5: update the password -- type 'password (new password)' and hit enter
+Step 6: type 'save' and hit enter.
+
+Redo Steps 1-3 to SSH into the router using the new updated password.
+Step 7: type 'network interface eth2 ipv4' and hit enter
+Step 8: Verify the current ip address by typing 'address' and enter: should be default ip address 192.168.2.1/24
+Step 9: set new ip address and subnet: type 'address (new ip address/subnet)' and hit enter
+Step 10: if necessary, set new gateway by typing 'gateway (new gateway)' and hit enter.
+Step 11: type 'save' and hit enter.
+Step 12: type 'exit' and hit enter.
+Step 13: type 'q' and hit enter. You are now back in the powershell directory.
+Step 14: type 'ipconfig /release
+Step 15: type 'ipconfig /renew'
+
+Router configuration is now complete.

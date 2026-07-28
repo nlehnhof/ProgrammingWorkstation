@@ -129,10 +129,6 @@ class ProgramPage(QMainWindow):
 
     def program_device(self):
         device = self.device_chosen.currentText().strip()
-        device_info = manager.get_credentials(device)
-        if device_info is None:
-            print("Device Info not found")
-            return
         program_file = os.path.join(current_dir, f"../devices/{device}/prog_dev.py")
         func_name = "run_main_script"
         with open(program_file, "r") as file:
@@ -143,7 +139,7 @@ class ProgramPage(QMainWindow):
             
         namespace = {}
         exec(code, namespace)
-        namespace[func_name](self.airport.currentText().strip(), self.gate.currentText().strip(), self.temp_pass, device)
+        namespace[func_name](self.airport.currentText().strip(), self.gate.currentText().strip(), self.temp_pass)
         # print("Connected...", flush=True)
         
     def update_airports(self):
@@ -163,9 +159,10 @@ class ProgramPage(QMainWindow):
     def load_instructions(self, device):
         while self.instructions_layout.count():
             item = self.instructions_layout.takeAt(0)
-            widget = item.widget()
-            if widget:
-                widget.deleteLater()
+            if item is not None:
+                widget = item.widget()
+                if widget:
+                    widget.deleteLater()
 
         file_path = os.path.join(f'C:\\Users\\u324754\\programming_workstation\\devices\\{device}', 'instructions.txt')
         with open(file_path, "r") as f:

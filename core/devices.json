@@ -1,6 +1,10 @@
 {
+    "digiIX20": {
+        "Name": "digiIX20",
+        "Path": "C:\\Users\\u324754\\teltonika"
+    },
     "TR": {
-        "Path": "C:\\Users\\u324754\\teltonika",
-        "type": "ssh_device"
+        "Name": "TR",
+        "Path": "C:\\Users\\u324754\\teltonika"
     }
 }

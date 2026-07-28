@@ -154,8 +154,14 @@ def lookup_excel(sheet, gate, device):
         print("Excel Read Error:", type(e).__name__, e)
         import traceback; traceback.print_exc()
 
-def run_main_script(airport, gate, temp_pass, device):
-    lookup_excel(airport, gate, device)
+def run_main_script(airport, gate, temp_pass):
+    dir_path = os.path.dirname(__file__)
+    print("Directory path:", dir_path)
+    script_path = os.path.join(dir_path, "teltonika.py")
+    sheet = os.path.join(dir_path, airport)
+    print(script_path, flush=True)
+    lookup_excel(sheet, gate, "TR")
+    device = "TR"
     current_dir = os.getcwd()
     device_path = os.path.join(current_dir, f"devices\\{device}")
     script_path = os.path.join(device_path, "teltonika.py")
@@ -179,7 +185,7 @@ def run_main_script(airport, gate, temp_pass, device):
     print("Running teltonika.py...", flush=True)
 
     process = subprocess.Popen([sys.executable, script_path, str(gate_ip), str(gate_netmask), str(gate_gateway), str(temp_pass)], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
-    for line in process.stdout:
+    for line in process.stdout: # type:ignore
         print(line, end="")
 
     process.wait()

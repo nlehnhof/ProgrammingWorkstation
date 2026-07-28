@@ -77,8 +77,7 @@ class DeviceManager:
     def get_credentials(self, name: str):
         """Retrieve stored credentials for a device from a JSON file."""
         if not os.path.exists(self.json_path):
-            # No credentials file found
-            return None
+            return "Error: json path"
 
         try:
             with open(self.json_path, "r", encoding="utf-8") as f:

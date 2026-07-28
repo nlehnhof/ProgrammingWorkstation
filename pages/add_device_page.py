@@ -108,12 +108,12 @@ class AddDevice(QMainWindow):
             QLineEdit {
                 font-size: 14px;
                 color: black;
-                background-color: #000;
+                background-color: #FFFFFF;
                 border: 1px solid #888;
                 border-radius: 5px;
                 padding: 5px;
             }
-            QLineEidt:placeholder {
+            QLineEdit:placeholder {
                 color: #888;
                 font-style: italic;
             }
