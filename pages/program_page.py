@@ -88,6 +88,7 @@ class ProgramPage(QMainWindow):
         l_device.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         l_device.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.router = QLineEdit()
+        self.router.setPlaceholderText("Enter device password / info here...")
         self.submit = QPushButton("Submit")
         self.submit.clicked.connect(self.on_submit)
 
@@ -116,6 +117,7 @@ class ProgramPage(QMainWindow):
 
         # Program Button
         self.program_button = QPushButton("Program Device")
+        self.program_button.setEnabled(False)
         self.program_button.clicked.connect(self.program_device)
 
         first.addWidget(self.program_button)
@@ -136,11 +138,28 @@ class ProgramPage(QMainWindow):
 
         if code is None:
             print("Nothing found")
+
+        if not device or not self.airport or not self.gate or not self.temp_pass:
+                QMessageBox.critical(
+                    self,
+                    "Missing Information",
+                    "Please fill out Device, Airport, Gate, and Password before proceeding."
+                )
+                return  # Stop execution
             
         namespace = {}
         exec(code, namespace)
-        namespace[func_name](self.airport.currentText().strip(), self.gate.currentText().strip(), self.temp_pass)
-        # print("Connected...", flush=True)
+        namespace[func_name](self.airport.currentText().strip(), self.gate.currentText().strip(), self.temp_pass, device)
+        while self.instructions_layout.count():
+            item = self.instructions_layout.takeAt(0)
+            widget = item.widget() # type:ignore
+            if widget is not None:
+                widget.setParent(None)
+                widget.deleteLater()
+        complete = QLabel("Router Configuration Complete")
+        complete.setFont(header_font)
+        complete.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.instructions_layout.addWidget(complete)
         
     def update_airports(self):
         """Update airport dropdown based on device chosen."""
@@ -164,14 +183,30 @@ class ProgramPage(QMainWindow):
                 if widget:
                     widget.deleteLater()
 
+        self.instruction_checkboxes = []
+
         file_path = os.path.join(f'C:\\Users\\u324754\\programming_workstation\\devices\\{device}', 'instructions.txt')
-        with open(file_path, "r") as f:
-            for line in f:
-                text = line.strip()
-                if text:
-                    self.instructions_layout.addWidget(QCheckBox(text))
+        try:
+            with open(file_path, "r") as f:
+                for line in f:
+                    text = line.strip()
+                    if text:
+                        checkbox = QCheckBox(text)
+                        self.instructions_layout.addWidget(checkbox)
+                        self.instruction_checkboxes.append(checkbox)
+
+                        checkbox.stateChanged.connect(self.update_button_state)
+        except FileNotFoundError:
+            print(f"Instructions file not found: {file_path}")
 
         self.instructions_layout.addStretch()
+        self.program_button.setEnabled(False)
+        
+        
+    def update_button_state(self):
+        """Enable button only if all dynamically created checkboxes are checked."""
+        all_checked = all(cb.isChecked() for cb in self.instruction_checkboxes)
+        self.program_button.setEnabled(all_checked)
 
     def update_gates(self):
         """Update Gate dropdown based on airport chosen."""
@@ -226,5 +261,8 @@ class ProgramPage(QMainWindow):
     def on_submit(self):
         user_text=self.router.text().strip()
         print("User Submitted: ", user_text)
-        self.temp_pass = user_text.split("PW:")[1].split(";")[0]
+        try:
+            self.temp_pass = user_text.split("PW:")[1].split(";")[0]
+        except:
+            self.temp_pass = user_text
         print("Temp_pass: ", self.temp_pass, flush=True)

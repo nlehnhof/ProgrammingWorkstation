@@ -154,14 +154,13 @@ def lookup_excel(sheet, gate, device):
         print("Excel Read Error:", type(e).__name__, e)
         import traceback; traceback.print_exc()
 
-def run_main_script(airport, gate, temp_pass):
-    dir_path = os.path.dirname(__file__)
+def run_main_script(airport, gate, temp_pass, device):
+    dir_path = os.path.dirname(f"devices/{device}/prog_dev.py")
     print("Directory path:", dir_path)
     script_path = os.path.join(dir_path, "teltonika.py")
     sheet = os.path.join(dir_path, airport)
     print(script_path, flush=True)
     lookup_excel(sheet, gate, "TR")
-    device = "TR"
     current_dir = os.getcwd()
     device_path = os.path.join(current_dir, f"devices\\{device}")
     script_path = os.path.join(device_path, "teltonika.py")
@@ -720,7 +719,7 @@ def run_test_script(device_path, device, airport, excel, gate):
     print("\n")
     
     #add local ip to BBB
-    ip_parts = gate_ip.split(".")
+    ip_parts = gate_ip.split(".") # type:ignore
     print("ip_parts: ", ip_parts)
     end_num = ip_parts[-1]
     if end_num == "123":
@@ -802,15 +801,15 @@ def run_test_script(device_path, device, airport, excel, gate):
     to_find = gate
     found = False
       
-    for row in sheet.iter_rows(values_only=False):
+    for row in sheet.iter_rows(values_only=False): # type:ignore
         for cell in row:
             if str(cell.value) == to_find:
                 print("Collecting Label Info")
                 t_row = cell.row
                 t_col = cell.column
-                bridge_serial = sheet.cell(row=t_row, column=t_col + 1).value
-                router_num = sheet.cell(row=t_row, column=t_col + 2).value
-                mac_addr = sheet.cell(row=t_row, column=t_col + 3).value
+                bridge_serial = sheet.cell(row=t_row, column=t_col + 1).value # type:ignore
+                router_num = sheet.cell(row=t_row, column=t_col + 2).value # type:ignore
+                mac_addr = sheet.cell(row=t_row, column=t_col + 3).value # type:ignore
                                 
                 print("Bridge Serial: ", bridge_serial)
                 print("Router Num: ", router_num)
@@ -839,7 +838,7 @@ def run_test_script(device_path, device, airport, excel, gate):
             print("Selected gate: ", gate)
             found = False
             
-            for row in sheet.iter_rows(values_only=False):
+            for row in sheet.iter_rows(values_only=False): # type:ignore
                 for cell in row:
                     if str(cell.value) == to_find:
                         t_row = cell.row
@@ -848,19 +847,19 @@ def run_test_script(device_path, device, airport, excel, gate):
                         print("Col:", t_col)
                         print("Test Error Value: ", test_error)
 
-                        t_cell = sheet.cell(row=t_row, column=12)
+                        t_cell = sheet.cell(row=t_row, column=12) # type:ignore
                         t_cell.value = current_datetime
                         t_cell.font = Font(color="FF0000")
 
                         t_row = cell.row
                         t_col = cell.column
-                        file_path_crash = os.path.abspath(os.path.join(device_path, f"crash_logs/{filename_crash}")) 
-                        cell = sheet.cell(row=t_row, column=13)
-                        cell.value = filename_crash
+                        file_path_crash = os.path.abspath(os.path.join(device_path, f"crash_logs/{filename_crash}"))  # type:ignore
+                        cell = sheet.cell(row=t_row, column=13) # type:ignore
+                        cell.value = filename_crash # type:ignore
                         cell.hyperlink = file_path_crash
                         cell.font = Font(color="0000FF", underline="single")
                         
-                        cell = sheet.cell(row=t_row, column=14)
+                        cell = sheet.cell(row=t_row, column=14) # type:ignore
                         if cell.value is None:
                             cell.value = int(1)
                         else:
@@ -894,7 +893,7 @@ def run_test_script(device_path, device, airport, excel, gate):
             print("Test Selected gate: ", gate)
             found = False
             
-            for row in sheet.iter_rows(values_only=False):
+            for row in sheet.iter_rows(values_only=False): # type:ignore
                 for cell in row:
                     if str(cell.value) == to_find:
                         t_row = cell.row
@@ -903,19 +902,19 @@ def run_test_script(device_path, device, airport, excel, gate):
                         print("col:", t_col)
                         print("Test Error Value: ", test_error)
 
-                        t_cell = sheet.cell(row=t_row, column=12)
+                        t_cell = sheet.cell(row=t_row, column=12) # type:ignore
                         t_cell.value = current_datetime
                         t_cell.font = Font(color="000000")
                             
                         print("Trying to Remove Crash Log File")
 
                         #remove the crash file if it exists
-                        t_cell = sheet.cell(row=t_row, column=13)
+                        t_cell = sheet.cell(row=t_row, column=13) # type:ignore
                         print(t_cell.value)
                         t_cell.value = " "
 
                         #Test Number Increase by 1
-                        cell = sheet.cell(row=t_row, column=14)
+                        cell = sheet.cell(row=t_row, column=14) # type:ignore
                         if cell.value is None:
                             cell.value = int(1)
                         else:

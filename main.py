@@ -17,6 +17,7 @@ def main():
         QWidget { background: #FFFFFF; color: #0B0000; }
         QPushButton { background: #4CAF50; color: white; }
         QPushButton:hover { background: #45a049; }
+        QPushButton:disabled { background: lightgray;}
     """)
     app.setFont(QFont("Helvetica", 10))
     window = MainPage()

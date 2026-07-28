@@ -29,6 +29,11 @@ else:
     print(gate_name, flush=True)
     sys.exit(0)
     
+print(gate_ip, flush=True)
+print(gate_netmask, flush=True)
+print(gate_gateway, flush=True)
+print(default_pass, flush=True)
+
 # Global Variables
 ssh_router_ip = '192.168.2.1'
 ssh_router_user = 'admin'
@@ -103,8 +108,7 @@ def ssh_router_connect():
     time.sleep(s_pause)
     output = shell.recv(5000).decode()
     print("Router Login Output:\n", output, flush=True)
-    
-    sftp_router = ssh_router.open_sftp()
+    # sftp_router = ssh_router.open_sftp()
     time.sleep(s_pause)
     
     return output
@@ -120,15 +124,15 @@ def ssh_router_run(cmd):
         print("Errors:\n", error, flush=True)
     return output
 
-def ssh_router_upload(file, router_file):
-    global sftp_router
-    sftp_router.put(file, router_file)
+# def ssh_router_upload(file, router_file):
+#     global sftp_router
+#     sftp_router.put(file, router_file)
     
 def ssh_router_close():
     print("Closing Connection to Router", flush=True)
     global ssh_router, sftp_router
-    if sftp_router:
-        sftp_router.close()
+    # if sftp_router:
+    #     sftp_router.close()
     if ssh_router:
         ssh_router.close()
     time.sleep(s_pause)
@@ -138,43 +142,6 @@ def ssh_router_close():
 ######### START OF AUTOMATION SCRIPT #########
 ##############################################
 
-ssh_router_connect()
-time.sleep(1)
-
-shell = ssh_router.invoke_shell()
-
-ssh_router_run("a\n")
-time.sleep(1)
-ssh_router_run("config\n")
-time.sleep(1)
-ssh_router_run("network interface eth2 ipv4\n")
-time.sleep(2)
-ssh_router_run("address\n")
-time.sleep(1)
-output = shell.recv(4096).decode()
-print(output, flush=True)
-
-ssh_router_run(f"address {gate_ip}/24\n")
-time.sleep(1)
-if gate_gateway is not None:
-    ssh_router_run(f"gateway {gate_gateway}\n")
-    time.sleep(1)
-
-ssh_router_run("save\n")
-time.sleep(1)
-ssh_router_run("exit\n")
-time.sleep(1)
-ssh_router_run("q\n")
-
-shell.send(b"ipconfig /release\n")
-time.sleep(2)
-shell.send(b"ipconfig /renew\n")
-time.sleep(4)
-print("Router configuration is now complete.", flush=True)
-ssh_router_close()
-shell.close()
-time.sleep(1)
-
 ## Change Router password to Jetway@dm1n
 if password == True:
     ssh_router_connect()
@@ -182,14 +149,82 @@ if password == True:
 
     shell = ssh_router.invoke_shell()
 
-    ssh_router_run("a\n")
+    shell.send(b"a\n")
     time.sleep(1)
-    ssh_router_run("config\n")
+    shell.send(b"config\n")
     time.sleep(1)
-    ssh_router_run("auth user admin\n")
+    shell.send(b"auth user admin\n")
     time.sleep(2)
-    ssh_router_run(f"password {router_new_pswd}\n")
+    shell.send(f"password {router_new_pswd}\n".encode("utf-8"))
     time.sleep(2)
-    ssh_router_run("save\n")
-    time.sleep(1)
+    shell.send(b"save\n")
+    output = shell.recv(4096).decode()
+    print(output, flush=True)
+    if "Enter" in output:
+        try:
+            shell.send(default_pass.encode("utf-8"))
+            time.sleep(2)
+            output = shell.recv(4096).decode()
+            print(output, flush=True)
+        except Exception as e:
+            print(f"Error updating password: {e}")
+
     print("Password updated.", flush=True)
+
+## Update IP address and gate_gateway : hard-coded netmask (/24)
+ssh_router_connect()
+shell = ssh_router.invoke_shell()
+time.sleep(2)
+if shell.recv_ready():
+    output = shell.recv(4096).decode("utf-8", errors = "ignore")
+
+shell.send(b"a\n")
+time.sleep(1)
+output = shell.recv(4096).decode()
+print(output, flush=True)
+time.sleep(3)
+shell.send(b"config\n")
+output = shell.recv(4096).decode()
+print(output, flush=True)
+time.sleep(2)
+shell.send(b"network interface eth2 ipv4\n")
+time.sleep(2)
+shell.send(b"address\n")
+output = shell.recv(4096).decode()
+print(output, flush=True)
+time.sleep(1)
+print(gate_ip, flush=True)
+shell.send(f"address {gate_ip}/24\n".encode("utf-8"))
+time.sleep(2)
+output = shell.recv(4096).decode()
+print(output, flush=True)
+
+if gate_gateway is not None:
+    shell.send(f"gateway {gate_gateway}\n".encode("utf-8"))
+    time.sleep(1)
+
+shell.send(b"save\n")
+time.sleep(3)
+output = shell.recv(4096).decode()
+print(output, flush=True)
+shell.send(b"exit\n")
+time.sleep(3)
+output = shell.recv(4096).decode()
+print(output, flush=True)
+shell.send(b"q\n")
+time.sleep(1)
+output = shell.recv(4096).decode()
+print(output, flush=True)
+time.sleep(2)
+
+shell.send(b"ipconfig /release\n")
+time.sleep(4)
+output = shell.recv(4096).decode()
+print(output, flush=True)
+shell.send(b"ipconfig /renew\n")
+time.sleep(4)
+output = shell.recv(4096).decode()
+print(output, flush=True)
+print("Router configuration is now complete.", flush=True)
+shell.close()
+time.sleep(1)
