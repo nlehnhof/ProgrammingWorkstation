@@ -2,7 +2,7 @@
 import subprocess
 import time
 import paramiko
-import pexpect
+from pexpect.popen_spawn import PopenSpawn
 import re
 import threading
 
@@ -40,6 +40,9 @@ ssh_router_ip = '192.168.2.1'
 ssh_router_user = 'admin'
 router_new_pswd = 'Jetway@dm1n'
 
+ssh_bbb = paramiko.SSHClient()
+ssh_router = paramiko.SSHClient()
+
 ################## SSH BBB ####################
 def ssh_bbb_connect(bbb_ip: str = "192.168.7.2"):
     print("Connecting to BBB", flush=True)
@@ -59,7 +62,7 @@ def ssh_bbb_run(cmd):
     global ssh_bbb
     stdin, stdout, stderr = ssh_bbb.exec_command(cmd)
     output = stdout.read().decode()
-    error = stdout.read().decode()
+    error = stderr.read().decode()
     if output is not None:
         print("Output:\n", output, flush=True)
     if error is not None:
@@ -84,7 +87,7 @@ def ssh_bbb_close():
 
 def ssh_router_connect():
     print("Connecting to Router")
-    global ssh_router, router_new_pswd, default_pass
+    global ssh_router, router_new_pswd, default_pass, sftp_router
     print(default_pass, flush=True)
 
     ssh_router = paramiko.SSHClient()
@@ -99,14 +102,13 @@ def ssh_router_connect():
         # new_pswd  # U: admin P: Jetway@dm1n
             ssh_router.connect(ssh_router_ip, username=ssh_router_user, password=router_new_pswd)
         except:
-            print("Errors in Authentication", flush=True)
+            return print("Errors in Authentication", flush=True)
     
     print("Connected to Router", flush=True)
     
     shell = ssh_router.invoke_shell()
     time.sleep(s_pause)
     output = shell.recv(5000).decode()
-    print("Router Login Output:\n", output, flush=True)
     # sftp_router = ssh_router.open_sftp()
     time.sleep(s_pause)
     
@@ -143,35 +145,45 @@ def change_password():
     print("Changing router password...", flush=True)
 
     ssh_router_connect()
-    time.sleep(1)
-
+    time.sleep(2)
     shell = ssh_router.invoke_shell()
-
+    time.sleep(2)
     shell.send(b"a\n")
-    time.sleep(1)
+    time.sleep(2)
+    output = shell.recv(4096).decode()
+    print(output, flush=True)
     shell.send(b"config\n")
-    time.sleep(1)
+    time.sleep(2)
+    output = shell.recv(4096).decode()
+    print(output, flush=True)
+    time.sleep(2)
     shell.send(b"auth user admin\n")
-    time.sleep(2)
+    output = shell.recv(4096).decode()
+    print(output, flush=True)
+    time.sleep(5)
     shell.send(f"password {router_new_pswd}\n".encode("utf-8"))
-    time.sleep(2)
+    output = shell.recv(4096).decode()
+    print(output, flush=True)
+    time.sleep(5)
     shell.send(b"save\n")
+    time.sleep(4)
     output = shell.recv(4096).decode()
     print(output, flush=True)
     if "Enter" in output:
         try:
             shell.send(default_pass.encode("utf-8"))
-            time.sleep(2)
+            time.sleep(5)
             output = shell.recv(4096).decode()
             print(output, flush=True)
         except Exception as e:
             print(f"Error updating password: {e}")
 
-    print("Password updated.", flush=True)
+    # print("Password updated.", flush=True)
 
 ## Update IP address and gate_gateway : hard-coded netmask (/24)
 def firmware_update():
-    global ssh_bbb, ssh_router, ssh_router_ip
+    global ssh_bbb, ssh_router, ssh_router_ip, sftp_bbb
+    bbb_ip = None
 
     print("Updating router firmware...", flush=True)
     # Connect to BBB with 192.168.7.2
@@ -180,54 +192,46 @@ def firmware_update():
     time.sleep(2)
     
     # check ip addr show eth0 for 192.168.2....
-    ssh_bbb_run("ip addr show eth0")
-    time.sleep(2)
-    output2 = shell.recv(4096).decode()
-    print(output2, flush=True)
-    time.sleep(2)
-    match = re.search(r"inet (192\.168\.2\.\d{1,3})/", output2)
-    if match:
-        ip = match.group(1)
-        print(ip, flush=True)
-
-    return print("Match: ", match, flush=True)
+    output = ssh_bbb_run("ip addr show eth0")
+    pattern_ipv4 = r'\b192.\b168.\b2.\d{1,3}\b'
+    ips = re.findall(pattern_ipv4, output)
+    print(ips, flush=True)
+    if len(ips) > 1 and ips[0] != "192.168.2.255":
+        bbb_ip = ips[0]
 
     # if not, sudo dhclient -v eth0
     if len(ips) < 1:
         print("192.168.2 not in output", flush=True)
-        # ssh_bbb_run("sudo dhclient -v eth0")
-        # time.sleep(2)
-        # output = shell.recv(4096).decode()
-        # print(output, flush=True)
+        try:
+            ssh_bbb_run("sudo -n /sbin/dhclient -v eth0")
+            time.sleep(10)
+            output = ssh_bbb_run("ip addr show eth0")
+            pattern_ipv4 = r'\b192.\b168.\b2.\d{1,3}\b'
+            ips = re.findall(pattern_ipv4, output)
+            print(ips, flush=True)
+            if len(ips) > 1 and ips[0] != "192.168.2.255":
+                bbb_ip = ips[0]
+        except Exception as e:
+            return print(f"Error: {e}")
         # confirm ip addr eth0
-        ips2 = re.findall(r"192\.168\.2\.\d{1,3}\\24", output) 
-        print(ips2, flush=True)
-        if len(ips2) < 1:
+        if len(ips) < 1:
             return print("Failed to find ip addr", flush=True)
         bbb_ip = ips[0] if ips[0] != "192.168.2.1" else None
+        print(bbb_ip, flush=True)
         if bbb_ip is None:
             return print("Failed to get BBB IP correct.", flush=True)
-        bbb_ip = bbb_ip.split(f"\\")
-
-    # close BBB
-    ssh_bbb_close()
 
     # Enter PC terminal
     # PC to BBB transfer file
     # scp ".devices\digiIX20\firmware\01_LATEST_LTS_IX20-25.2.56.67-asof-2026APR14.bin" raj@{BBB_ip}:/home/raj/
-    print("Trying pexpect...", flush=True)
     try:
-        child = pexpect.spawn('scp ./devices/digiIX20/firmware/01_LATEST_LTS_IX20-25.2.56.67-asof-2026APR14.bin raj@{BBB_ip}:/home/raj/')
-        child.expect('password:')
-        child.sendline('Jetway')
-        child.expect(pexpect.EOF)
-        print("File copied", flush=True)
-    except pexpect.TIMEOUT:
-        return print("Timeout problem")
-    except pexpect.ExceptionPexpect as e:
-        return print(f"Error: {e}")
+        sftp_bbb.put('./devices/digiIX20/firmware/01_LATEST_LTS_IX20-25.2.56.67-asof-2026APR14.bin', '/home/raj/ix20-25.2.56-firmware.bin')
+        print("Firmware copied to BBB", flush=True)
     except Exception as e:
-        return print(f"Error: {e}")
+        return print(f"Error Here: {e}")
+    
+    # close BBB
+    ssh_bbb_close()
 
     # Connect to router
     ssh_router_connect()
@@ -241,11 +245,13 @@ def firmware_update():
     # scp host 192.168.2.183 user raj remote /home/raj/01_LATEST_LTS_IX20-25.2.56.67-asof-2026APR14.bin local /tmp/IX20-25.2.56.67-firmware.bin to local
     shell.send(b"a\n")
     time.sleep(1)
-    shell.send("scp host {bbb_ip} user raj remote /home/raj/01_LATEST_LTS_IX20-25.2.56.67-asof-2026APR14.bin local /tmp/IX20-25.2.56.67-firmware.bin to local\n".encode())
+    shell.send(f"scp host {bbb_ip} user raj remote /home/raj/01_LATEST_LTS_IX20-25.2.56.67-asof-2026APR14.bin local /tmp/IX20-25.2.56.67-firmware.bin to local\n".encode())
     time.sleep(2)
     output = shell.recv(4096).decode()
     print(output, flush=True)
     time.sleep(2)
+    shell.send("Jetway\n".encode())
+    time.sleep(12)
 
     # confirm with ls \tmp\ that the firmware file is there
     shell.send(b"ls /tmp/\n")
@@ -257,7 +263,7 @@ def firmware_update():
 
     # system firmware update file /tmp/IX20-25.2.56.67-firmware.bin
     shell.send(b"system firmware update file /tmp/IX20-25.2.56.67-firmware.bin\n")
-    time.sleep(15)
+    time.sleep(120)
     output = shell.recv(4096).decode()
     print(output, flush=True)
     if "Firmware update completed" not in output:
@@ -266,10 +272,7 @@ def firmware_update():
     # reboot
     shell.send(b"reboot\n")
     time.sleep(30)
-    output = shell.recv(4096).decode()
-    print(output, flush=True)
-    if "closed" in output:
-        return print("Firmware updated; reboot complete. Move to configurations.", flush=True)
+    print("Firmware updated; reboot complete. Move to configurations.", flush=True)
 
 def configure():
     global ssh_router, ssh_bbb, gate_ip, gate_gateway
@@ -334,5 +337,6 @@ def configure():
     time.sleep(1)
 
 print("Starting... ", flush=True)
-firmware_update()
+# firmware_update()
+change_password()
 print("Done.", flush=True)
