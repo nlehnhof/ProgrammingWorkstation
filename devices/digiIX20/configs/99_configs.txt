@@ -1,0 +1,2053 @@
+Enable central management
+Service
+Digi Remote Manager
+Management server
+edp12.devicecloud.com
+Management port
+3199
+Firmware server
+https://firmware.devicecloud.com/ws/v1/firmware/
+Speedtest server
+speedtest.accns.com
+Retry interval
+30s
+Keep-alive interval
+60s
+Cellular keep-alive interval
+290s
+Enable watchdog
+Restart timeout
+30m
+Reboot timeout
+Locally authenticate CLI
+Enable
+Destination phone number
+Service identifier
+Enable
+Server
+Port
+2138
+Enable
+Serial mode
+Remote access (TCP)
+Label
+Baud rate
+9600
+Data bits
+8
+Parity
+None
+Stop bits
+1
+Flow control
+None
+Escape sequence
+~b
+History size
+0
+Serial port sharing
+Idle timeout
+15m
+CTS
+DCD
+DCD
+DSR
+Enable
+Maximum frame count
+1024
+Idle time
+End pattern
+Strip end pattern
+Enable
+Port
+4001
+Add Address 
+Add Address 
+Add Interface 
+Add Zone 
+Enable mDNS
+Connection type
+Encrypted connection
+Enable TCP keep-alive messages
+Enable TCP nodelay
+Enable
+Port
+3001
+Add Address 
+Add Address 
+Add Interface 
+Add Zone 
+Enable mDNS
+Enable TCP keep-alive messages
+Enable TCP nodelay
+Enable
+Port
+2001
+Add Address 
+Add Address 
+Add Interface 
+Add Zone 
+Enable mDNS
+Enable TCP keep-alive messages
+Enable TCP nodelay
+Enable
+Connection trigger
+Always connect.
+Outbound connection type
+Encrypted connection
+Destination
+IP port
+0
+Enable TCP keep-alive
+Enable TCP nodelay
+Socket ID string
+Enable
+Log file name
+Log file size
+65536
+Type of data to log
+Both with arrows
+Timestamps
+Hexadecimal
+Enable
+Interface type
+Modem
+Zone
+External
+Device
+Modem
+Match SIM by
+Any SIM
+PIN
+Phone number
+Roaming
+Carrier selection mode
+Automatic
+SIM failover
+Connection attempts before SIM failover
+5
+SIM failover alternative
+Reset modem
+APN Selection
+Built in list only
+Enable
+Gateway/Netmask
+Enable
+Type
+Static IP address
+Metric
+3
+Weight
+10
+Management priority
+0
+MTU
+1500
+Use DNS
+When primary default route
+Enable
+Type
+Static IP address
+Metric
+3
+Weight
+10
+Management priority
+0
+MTU
+1500
+Use DNS
+When primary default route
+Enable
+Test interval
+15m
+Success condition
+One test passes
+Pass threshold
+1
+Response timeout
+15s
+Enable
+Label
+DNS configured
+IPv6
+Test type
+Test DNS servers configured for this interface
+Add Test 
+Enable
+Label
+Update routing
+Recovery type
+Change default gateway
+SureLink test failures
+1
+Increase metric to change active default gateway
+100
+Test interval between SureLink tests for this action
+1s
+Add Action 
+Delayed start
+300s
+Test interface gateway by pinging
+8.8.8.8
+Enable
+Interface type
+Ethernet
+Zone
+External
+Device
+Device: ETH1
+Enable server
+Reauth period
+3600
+Enable
+Type
+Static IP address
+Metric
+1
+Weight
+10
+Management priority
+0
+MTU
+1500
+Use DNS
+Always
+Force link
+Address
+10.3.16.41/24
+Default gateway
+10.3.16.1
+Add DNS server 
+Enable
+Lease time
+12h
+Lease range start
+100
+Lease range end
+250
+Gateway
+Automatic
+MTU
+Automatic
+Domain name suffix
+Primary DNS
+Automatic
+Secondary DNS
+Automatic
+Primary NTP server
+Automatic
+Secondary NTP server
+Automatic
+Primary WINS server
+None
+Secondary WINS server
+None
+Bootfile name
+TFTP server name
+BOOTP dynamic allocation
+Add Custom option 
+Add Static lease 
+Add DHCP server 
+Enable
+Type
+DHCPv6 address
+Metric
+1
+Weight
+10
+Management priority
+0
+MTU
+1500
+Use DNS
+Always
+DHCP hostname
+Enable
+Address
+Add MAC address 
+Add MAC address 
+Enable
+Test interval
+15m
+Success condition
+One test passes
+Pass threshold
+1
+Response timeout
+15s
+Enable
+Label
+DNS configured
+IPv6
+Test type
+Test DNS servers configured for this interface
+Add Test 
+Enable
+Label
+Update routing
+Recovery type
+Change default gateway
+SureLink test failures
+1
+Increase metric to change active default gateway
+100
+Test interval between SureLink tests for this action
+1s
+Add Action 
+Delayed start
+300s
+Test interface gateway by pinging
+8.8.8.8
+Enable
+Interface type
+Ethernet
+Zone
+Internal
+Device
+Device: ETH2
+Enable server
+Reauth period
+3600
+Enable
+Type
+Static IP address
+Metric
+5
+Weight
+10
+Management priority
+0
+MTU
+1500
+Use DNS
+Always
+Force link
+Address
+192.168.81.5/24
+Default gateway
+0.0.0.0
+Add DNS server 
+Enable
+Lease time
+12h
+Lease range start
+100
+Lease range end
+250
+Gateway
+Automatic
+MTU
+Automatic
+Domain name suffix
+Primary DNS
+Automatic
+Secondary DNS
+Automatic
+Primary NTP server
+Automatic
+Secondary NTP server
+Automatic
+Primary WINS server
+None
+Secondary WINS server
+None
+Bootfile name
+TFTP server name
+BOOTP dynamic allocation
+Add Custom option 
+Add Static lease 
+Add DHCP server 
+Enable
+Type
+IPv6 prefix delegation
+Metric
+5
+Weight
+10
+Management priority
+0
+MTU
+1500
+Use DNS
+Always
+Enable
+Address
+Prefix length
+48
+Prefix ID
+1
+Enable
+Add MAC address 
+Add MAC address 
+Enable
+Test interval
+15m
+Success condition
+One test passes
+Pass threshold
+1
+Response timeout
+15s
+Enable
+Label
+DNS configured
+IPv6
+Test type
+Test DNS servers configured for this interface
+Add Test 
+Add Action 
+Delayed start
+300s
+Test interface gateway by pinging
+8.8.8.8
+Enable
+Interface type
+Static IP address
+Zone
+Loopback
+Metric
+0
+Weight
+10
+Management priority
+0
+MTU
+65535
+Use DNS
+Always
+Device
+Device: Loopback
+Force link
+Address
+127.0.0.1/8
+Default gateway
+Add DNS server 
+Enable
+Lease time
+12h
+Lease range start
+100
+Lease range end
+250
+Gateway
+Automatic
+MTU
+Automatic
+Domain name suffix
+Primary DNS
+Automatic
+Secondary DNS
+Automatic
+Primary NTP server
+Automatic
+Secondary NTP server
+Automatic
+Primary WINS server
+None
+Secondary WINS server
+None
+Bootfile name
+TFTP server name
+BOOTP dynamic allocation
+Add Custom option 
+Add Static lease 
+Add DHCP server 
+Enable
+Interface type
+Static IP address
+Zone
+Setup
+Metric
+10
+Weight
+10
+Management priority
+0
+MTU
+1500
+Use DNS
+Always
+Device
+Device: ETH2
+Force link
+Address
+192.168.210.1/24
+Default gateway
+Add DNS server 
+Enable
+Lease time
+12h
+Lease range start
+100
+Lease range end
+250
+Gateway
+Automatic
+MTU
+Automatic
+Domain name suffix
+Primary DNS
+Automatic
+Secondary DNS
+Automatic
+Primary NTP server
+Automatic
+Secondary NTP server
+Automatic
+Primary WINS server
+None
+Secondary WINS server
+None
+Bootfile name
+TFTP server name
+BOOTP dynamic allocation
+Add Custom option 
+Add Static lease 
+Add DHCP server 
+Enable
+Interface type
+Static IP address
+Zone
+Setup
+Metric
+0
+Weight
+10
+Management priority
+0
+MTU
+1500
+Use DNS
+Always
+Device
+Device: ETH2
+Force link
+Address
+169.254.100.100/16
+Default gateway
+Add DNS server 
+Enable
+Lease time
+12h
+Lease range start
+100
+Lease range end
+250
+Gateway
+Automatic
+MTU
+Automatic
+Domain name suffix
+Primary DNS
+Automatic
+Secondary DNS
+Automatic
+Primary NTP server
+Automatic
+Secondary NTP server
+Automatic
+Primary WINS server
+None
+Secondary WINS server
+None
+Bootfile name
+TFTP server name
+BOOTP dynamic allocation
+Add Custom option 
+Add Static lease 
+Add DHCP server 
+Add 
+Interface
+ 
+Speed
+Auto
+Speed
+Auto
+Add 
+VLAN
+ 
+Add 
+Bridge
+ 
+Add Route 
+Add Route policy 
+Enable
+Zone
+Dynamic routes
+Enable
+Allow ECMP
+Routing table update interval
+30s
+Routing information timeout
+180s
+Garbage collection timeout
+120s
+Add Interface 
+Add Neighbour IP 
+Enable
+Metric
+1
+Enable
+Metric
+1
+Enable
+Metric
+1
+Enable
+Metric
+1
+Enable
+Metric
+1
+Enable
+Metric
+1
+Enable
+Routing table update interval
+30s
+Routing information timeout interval
+180s
+Garbage collection interval
+120s
+Add Interface 
+Enable
+Metric
+1
+Enable
+Metric
+1
+Enable
+Metric
+1
+Enable
+Metric
+1
+Enable
+Metric
+1
+Enable
+Router ID
+ABR behaviour
+Cisco/IBM
+Reference bandwidth
+100
+Enable Opaque-LSA
+Enable RFC1583 compatibility
+SPF delay
+200ms
+SPF minimum hold time
+1s
+SPF maximum hold time
+10s
+Refresh timer
+30m
+Add Network 
+Add Interface 
+Add Area 
+Add Neighbour 
+Enable
+Metric
+1
+Enable
+Metric
+1
+Enable
+Metric
+1
+Enable
+Metric
+1
+Enable
+Metric
+1
+Enable
+Metric
+1
+Enable
+Router ID
+Reference bandwidth
+100
+SPF delay
+200ms
+SPF minimum hold time
+1s
+SPF maximum hold time
+10s
+Add Interface 
+Add Area 
+Enable
+Metric
+1
+Enable
+Metric
+1
+Enable
+Metric
+1
+Enable
+Metric
+1
+Enable
+Metric
+1
+Enable
+Port
+179
+AS number
+1
+Router ID
+Internal route distance
+1
+External route distance
+1
+Local route distance
+1
+Best path criteria
+Confederation path sets
+Add Neighbour 
+Enable
+Half-life
+1
+Reuse threshold
+1
+Suppress threshold
+1
+Maximum stable route suppression duration
+1
+Enable
+Metric
+1
+Enable
+Metric
+1
+Enable
+Metric
+1
+Enable
+Metric
+1
+Enable
+Metric
+1
+Enable
+Metric
+1
+Add 
+Route Map Group
+ 
+Add Network 
+Enable
+IP Holdtime
+120m
+Add Network 
+Enable
+Add 
+Area
+ 
+Add Interface 
+Add 
+IP List
+ 
+Add 
+Prefix List
+ 
+Enable
+Match modem by
+Port
+Match port
+Modem port: Module
+Active SIM slot
+Any
+Preferred SIM slot
+None
+Maximum number of interfaces
+1
+Modem status update interval
+10s
+Carrier switching
+Access technology
+All technologies
+Antennas
+Main and auxiliary (best performance / connection)
+4G bands
+all
+5G bands
+all
+Add 
+Modem
+ 
+Enable (requires DigiRM license)
+Add Server 
+Tunnel username
+Tunnel password
+Mode
+Bonding
+Zone
+External
+Metric
+0
+Weight
+10
+Add Interfaces 
+Bonding Proxy
+Encryption
+Interface password
+Enable
+Test interval
+15m
+Success condition
+One test passes
+Pass threshold
+1
+Response timeout
+15s
+Enable
+Label
+Interface Up
+IPv6
+Test type
+Test the interface status.
+Down time
+60s
+Initial connection time
+60s
+Add Test 
+Enable
+Label
+Update routing
+Recovery type
+Change default gateway
+SureLink test failures
+3
+Increase metric to change active default gateway
+100
+Test interval between SureLink tests for this action
+5s
+Enable
+Label
+Restart interface
+Recovery type
+Restart interface
+SureLink test failures
+3
+Test interval between SureLink tests for this action
+0s
+Add Action 
+Delayed start
+300s
+Test interface gateway by pinging
+8.8.8.8
+Add 
+Service
+ 
+Add 
+VRRP instance
+ 
+Add 
+Capture settings
+ 
+Add 
+clients
+ 
+Add 
+Bond device
+ 
+IPv6 ULA prefix
+fd00:2704::/48
+TCP fin_timeout
+15s
+TCP keepalive_intvl
+15s
+TCP keepalive_probes
+5
+TCP keepalive_time
+10m
+TCP retries2
+15
+TCP rfc1337
+TCP rmem
+0
+TCP wmem
+0
+DHCP persistent leases
+Sequential DHCP address allocation
+ICMP redirection
+Add 
+IPsec tunnel
+ 
+NAT keep alive time
+40s
+Maximum IKE fragment size
+1280
+IKE retransmit tries
+5
+Initial response timeout
+4s
+Limit
+Jitter percentage
+0
+Initial timeout
+5s
+Limit
+2m
+Jitter percentage
+0
+Interval duration
+5s
+Jitter percentage
+0
+Debug level
+Disable debug messages.
+Add 
+OpenVPN server
+ 
+Add 
+OpenVPN client
+ 
+Add 
+IP tunnel
+ 
+UDP listening port
+1701
+Add Address 
+Add Address 
+Add Interface 
+Add Zone 
+Add 
+L2TP access concentrator
+ 
+Add 
+L2TP network server
+ 
+Add 
+L2TPv3 ethernet tunnel
+ 
+Add 
+MACsec tunnel
+ 
+Add 
+NEMO Tunnel
+ 
+Add 
+WireGuard tunnel
+ 
+Source NAT
+Source NAT
+Source NAT
+Source NAT
+Source NAT
+Source NAT
+Source NAT
+Source NAT
+Add 
+Zone
+ 
+Enable
+Label
+ENIP
+Interface
+Interface: ETH1
+IP version
+IPv4
+Protocol
+TCP
+Incoming port(s)
+44818
+To address
+192.168.81.7
+Destination port(s)
+44818
+Add Address 
+Add Zone 
+Enable
+Label
+ModbusTCP
+Interface
+Interface: ETH1
+IP version
+IPv4
+Protocol
+TCP
+Incoming port(s)
+502
+To address
+192.168.81.7
+Destination port(s)
+502
+Add Address 
+Add Zone 
+Add Port forward 
+Enable
+Label
+Allow all outgoing traffic
+Action
+Accept
+IP version
+Any
+Protocol
+Any
+Source zone
+Internal
+Destination zone
+Any
+Add Packet filter 
+Enable
+Override
+Rules
+iptables -t nat -I PREROUTING -i eth1 -p icmp -j DNAT --to 192.168.81.7
+iptables -I INPUT -p udp -d 255.255.255.255 -j ACCEPT
+
+Enable
+Label
+Outbound
+Interface
+Interface bandwidth (Mbit)
+95
+Enable
+Label
+Default
+Weight
+7
+Latency
+100
+Default
+Enable
+Label
+High priority
+Weight
+3
+Latency
+30
+Default
+Enable
+Label
+VoIP ToS DSCP 26 flash
+Type of Service
+0x68
+Protocol
+UDP
+Source port
+any
+Destination port
+any
+Type
+Any
+Type
+Any
+Enable
+Label
+VoIP ToS DSCP 46 critical
+Type of Service
+0xB8
+Protocol
+UDP
+Source port
+any
+Destination port
+any
+Type
+Any
+Type
+Any
+Add Rule 
+Add Policy 
+Enable
+Label
+Inbound
+Interface
+Interface bandwidth (Mbit)
+95
+Enable
+Label
+Default
+Weight
+7
+Latency
+100
+Default
+Enable
+Label
+High priority
+Weight
+3
+Latency
+30
+Default
+Enable
+Label
+VoIP ToS DSCP 26 flash
+Type of Service
+0x68
+Protocol
+any
+Source port
+any
+Destination port
+any
+Type
+Any
+Type
+Any
+Enable
+Label
+VoIP ToS DSCP 46 critical
+Type of Service
+0xB8
+Protocol
+any
+Source port
+any
+Destination port
+any
+Type
+Any
+Type
+Any
+Add Rule 
+Add Policy 
+Add Binding 
+Enable web filtering
+Web filtering service
+Cisco Umbrella
+API Token
+IPv4
+IPv6
+Enable
+Port
+443
+Add Address 
+Add Address 
+Add Interface 
+Zone
+Internal
+Zone
+Edge
+Zone
+IPsec
+Zone
+Setup
+Add Zone 
+Enable mDNS
+SSL certificate
+View
+Auto
+Enable
+Port
+80
+Add Address 
+Add Address 
+Add Interface 
+Zone
+Internal
+Zone
+Edge
+Zone
+IPsec
+Zone
+Setup
+Add Zone 
+Enable mDNS
+Minimum TLS version
+TLS version 1.2 and above.
+Enable
+Port
+22
+Add Address 
+Add Address 
+Add Interface 
+Zone
+Internal
+Zone
+Edge
+Zone
+IPsec
+Zone
+Setup
+Add Zone 
+Enable mDNS
+Private key
+Enable
+Override
+Configuration file
+Enable
+Port
+23
+Add Address 
+Add Address 
+Add Interface 
+Zone
+Internal
+Zone
+Edge
+Zone
+IPsec
+Add Zone 
+Enable mDNS
+Add Address 
+Add Address 
+Add Interface 
+Zone
+Internal
+Zone
+IPsec
+Add Zone 
+Cache negative responses
+Query all servers
+Rebind protection
+Fallback server
+8.8.8.8
+Add Server 
+Add Host 
+Add Domain 
+Enable
+Port
+161
+Add Address 
+Add Address 
+Add Interface 
+Zone
+Internal
+Zone
+Edge
+Zone
+IPsec
+Zone
+Setup
+Add Zone 
+Enable mDNS
+Username
+Password
+Authentication type
+MD5
+Privacy passphrase
+Privacy protocol
+DES
+Add Property 
+Enable version 2c access
+Enable the location service
+Location update interval
+10s
+Label
+Type of location source
+Modem GNSS
+Modem
+Modem
+Enable the location source
+Add Source 
+Add Destination server 
+Add 
+Geofence
+ 
+Enable
+Debug
+Add 
+Modbus server
+ 
+Add 
+Modbus client
+ 
+Enable
+Add Address 
+Add Address 
+Add Interface 
+Zone
+Internal
+Zone
+Edge
+Zone
+IPsec
+Zone
+Setup
+Add Zone 
+Fall back to local clock
+Server
+time.devicecloud.com
+Add Server 
+Add 
+Multicast route
+ 
+Enable
+Add Address 
+Add Address 
+Add Interface 
+Zone
+Internal
+Zone
+Edge
+Zone
+IPsec
+Zone
+Setup
+Add Zone 
+Enable
+Port
+1883
+Add Address 
+Add Address 
+Add Interface 
+Add Zone 
+Debug
+Allow anonymous clients
+Allow zero length client id
+Use username as client id
+Add Client 
+Type
+None
+Add Pattern access control 
+Enable
+IPerf Server Port
+5201
+Add Address 
+Add Address 
+Add Interface 
+Zone
+Internal
+Zone
+Edge
+Zone
+IPsec
+Zone
+Setup
+Add Zone 
+Enable
+Add Address 
+Add Address 
+Add Interface 
+Add Zone 
+Enable
+RealPort Server Port
+1027
+Add Address 
+Add Address 
+Add Interface 
+Add Zone 
+Enable mDNS
+Minimum TLS version
+TLS version 1.0
+Encryption
+Authentication Method
+None
+Exclusive Mode
+RealPort Keepalive
+TCP Keepalive
+Device Initiated connections
+Verbose Logging
+Idle timeout
+Allow shell (Warning)
+Method
+Local users
+Add Method 
+Admin access
+Access level
+Full access
+Serial access
+Add Port 
+OpenVPN access
+Add Tunnel 
+Interactive shell access
+Nagios access
+Groupname alias
+Admin access
+Serial access
+Port
+Port 1
+Add Port 
+OpenVPN access
+Add Tunnel 
+Interactive shell access
+Nagios access
+Groupname alias
+Add 
+Group
+ 
+Enable
+Username alias
+Password
+•••••
+Enable
+Lockout tries
+5
+Lockout duration
+15m
+Group
+admin
+Group
+serial
+Add Group 
+Add 
+SSH key
+ 
+Enable
+Verification type
+Time-based (TOTP)
+Secret key
+Disallow code reuse
+Code refresh interval
+30s
+Valid code window size
+3
+Login limit
+3
+Login limit period
+30s
+Add Code 
+Add 
+User
+ 
+Add Server 
+Authoritative
+Group attribute
+groupname
+Service
+system
+Command authorization
+Command accounting
+Add Server 
+Authoritative
+RADIUS debug
+NAS ID
+Require Message-Authenticator
+Add Server 
+Authoritative
+TLS connection
+Start TLS
+Verify server certificate
+Server login
+Server password
+User search base
+dc=example,dc=com
+Login attribute
+uid
+Group attribute
+ou
+Timeout
+3
+TLS identity certificate
+Peer authentication
+Signed by CA
+Include standard CAs
+Add 
+CA certificate
+ 
+Add 
+Peer certificate
+ 
+Telnet Login
+Enable
+Protocol version
+NetFlow v10 (IPFIX)
+Flow sampler
+None
+Flow sampler population
+100
+Inactive timeout
+15
+Active timeout
+1800
+Maximum flows
+2000000
+Add Collector 
+Percent CPU Used
+Watchdog Errors
+1 Minute
+5 Minute
+15 Minute
+Percentage memory used
+Device configuration storage used
+Modem firmware storage used
+Transient storage used
+Logging and state storage used
+System Temperature
+Location
+Uptime
+Reboots
+Bytes received
+Packets received
+Overruns
+Bytes transmitted
+Packets transmitted
+Dropped packets
+Round-trip time
+Failure counter
+Disconnects
+Link status
+Bytes received
+Packets received
+Overruns
+Bytes transmitted
+Packets transmitted
+Dropped packets
+Round-trip time
+Failure counter
+Disconnects
+Link status
+Bytes received on all eth interfaces
+Bytes transmitted on all eth interfaces
+Bytes received on all cellular interfaces
+Bytes transmitted on all cellular interfaces
+Bytes received on all serial ports
+Bytes transmitted on all serial ports
+Name
+Model
+Disconnects
+Model Source
+IMEI
+Active SIM
+Cellular CORE modem model
+Cellular modem firmware revision
+Round-trip time
+Failure counter
+Carrier on this SIM
+SIM ICCID on this SIM
+SIM IMSI on this SIM
+SIM phone number on this SIM
+Carrier PLMN ID on this SIM
+Cellular SIM provider on this SIM
+SIM MCC on this SIM
+SIM MNC on this SIM
+SIM CID on this SIM
+SIM LAC on this SIM
+SIM TAC on this SIM
+Cellular modem firmware revision on this SIM
+Network Type
+Technology on this SIM
+Cellular network technology type on this SIM
+Cellular modem connection status on this SIM
+Cellular modem registration status on this SIM
+Cellular modem packet service state on this SIM
+Bytes received on this SIM
+Packets received
+Bytes transmitted on this SIM
+Packets transmitted
+Cellular APN in use on this SIM
+Cellular connectivity duration (seconds) on this SIM
+Signal strength percentage on this SIM
+Signal strength dBm this SIM
+Signal strength in bars on this SIM
+Cellular band(s) in use on this SIM
+EcIo on this SIM
+RSRP on this SIM
+RSRQ on this SIM
+RSSI on this SIM
+SINR on this SIM
+SNR on this SIM
+5G RRC State this SIM
+5G RSRP on this SIM
+5G RSRQ on this SIM
+5G SINR on this SIM
+Cellular 5G band(s) in use on this SIM
+SIM 5G NR CID on this SIM
+5G mode on this SIM
+5G uplink bandwidth on this SIM
+5G downlink bandwidth on this SIM
+Round-trip time
+Failure counter
+Carrier on this SIM
+SIM ICCID on this SIM
+SIM IMSI on this SIM
+SIM phone number on this SIM
+Carrier PLMN ID on this SIM
+Cellular SIM provider on this SIM
+SIM MCC on this SIM
+SIM MNC on this SIM
+SIM CID on this SIM
+SIM LAC on this SIM
+SIM TAC on this SIM
+Cellular modem firmware revision on this SIM
+Network Type
+Technology on this SIM
+Cellular network technology type on this SIM
+Cellular modem connection status on this SIM
+Cellular modem registration status on this SIM
+Cellular modem packet service state on this SIM
+Bytes received on this SIM
+Packets received
+Bytes transmitted on this SIM
+Packets transmitted
+Cellular APN in use on this SIM
+Cellular connectivity duration (seconds) on this SIM
+Signal strength percentage on this SIM
+Signal strength dBm this SIM
+Signal strength in bars on this SIM
+Cellular band(s) in use on this SIM
+EcIo on this SIM
+RSRP on this SIM
+RSRQ on this SIM
+RSSI on this SIM
+SINR on this SIM
+SNR on this SIM
+5G RRC State this SIM
+5G RSRP on this SIM
+5G RSRQ on this SIM
+5G SINR on this SIM
+Cellular 5G band(s) in use on this SIM
+SIM 5G NR CID on this SIM
+5G mode on this SIM
+5G uplink bandwidth on this SIM
+5G downlink bandwidth on this SIM
+Carrier
+Status
+Version
+Carrier
+Status
+Version
+Carrier
+Status
+Version
+Carrier
+Status
+Version
+Carrier
+Status
+Version
+Carrier
+Status
+Version
+Carrier
+Status
+Version
+Carrier
+Status
+Version
+Carrier
+Status
+Version
+Carrier
+Status
+Version
+Carrier
+Status
+Version
+Carrier
+Status
+Version
+Carrier
+Status
+Version
+Carrier
+Status
+Version
+Carrier
+Status
+Version
+Carrier
+Status
+Version
+Carrier
+Status
+Version
+Carrier
+Status
+Version
+Carrier
+Status
+Version
+Carrier
+Status
+Version
+Bytes received
+Packets received
+Bytes transmitted
+Packets transmitted
+Round-trip time
+Failure counter
+Signal strength percentage on cellular-1
+Signal strength bars on cellular-1
+Received Bytes
+Transmitted Bytes
+User name
+Remote IP
+Connect time
+Activity time
+User name
+Remote IP
+Connect time
+Activity time
+User name
+Remote IP
+Connect time
+Activity time
+User name
+Remote IP
+Connect time
+Activity time
+Round-trip time
+Failure counter
+IPSEC tunnel Received Bytes
+IPSEC tunnel Transmitted Bytes
+IPSEC tunnel status
+IPSEC tunnel Network Interface
+Number of disconnects
+IPSEC tunnel up time
+Round-trip time
+Failure counter
+IPSEC tunnel Received Bytes
+IPSEC tunnel Transmitted Bytes
+IPSEC tunnel status
+IPSEC tunnel Network Interface
+Number of disconnects
+IPSEC tunnel up time
+Round-trip time
+Failure counter
+IPSEC tunnel Received Bytes
+IPSEC tunnel Transmitted Bytes
+IPSEC tunnel status
+IPSEC tunnel Network Interface
+Number of disconnects
+IPSEC tunnel up time
+Round-trip time
+Failure counter
+IPSEC tunnel Received Bytes
+IPSEC tunnel Transmitted Bytes
+IPSEC tunnel status
+IPSEC tunnel Network Interface
+Number of disconnects
+IPSEC tunnel up time
+Status
+Cpu usage
+Disk free
+Disk used
+Active Proxy Connections
+Client build identifier
+Client version
+Connection attempts
+Enabled
+Interface
+Last error message
+Stats current latency
+Stats idle latency
+Total incoming bytes
+Stats total received packets
+Stats total received packets lost
+Total outgoing bytes
+Stats total transmitted packets
+Stats total sent packets acknowledged
+Stats total sent packets lost
+Connection attempts
+Enabled
+Interface
+Last error message
+Stats current latency
+Stats idle latency
+Total incoming bytes
+Stats total received packets
+Stats total received packets lost
+Total outgoing bytes
+Stats total transmitted packets
+Stats total sent packets acknowledged
+Stats total sent packets lost
+Connection attempts
+Enabled
+Interface
+Last error message
+Stats current latency
+Stats idle latency
+Total incoming bytes
+Stats total received packets
+Stats total received packets lost
+Total outgoing bytes
+Stats total transmitted packets
+Stats total sent packets acknowledged
+Stats total sent packets lost
+Connection attempts
+Enabled
+Interface
+Last error message
+Stats current latency
+Stats idle latency
+Total incoming bytes
+Stats total received packets
+Stats total received packets lost
+Total outgoing bytes
+Stats total transmitted packets
+Stats total sent packets acknowledged
+Stats total sent packets lost
+Client tunnel IP address
+Server tunnel IP address
+Server public endpoint address
+Tunnel status
+Total incoming
+Total outgoing
+Tunnel name
+Uptime
+Only report changed values to Digi Remote Manager.
+Enable device metrics samples upload
+Device health sample upload interval
+60 minutes
+Enable event log uploads
+Device event log upload interval
+60 minutes
+Enable intelliFlow
+Zone
+Internal
+Label
+Port number
+80
+Service name
+Web
+Label
+Port number
+443
+Service name
+Web
+Label
+Port number
+8080
+Service name
+Web
+Label
+Port number
+20
+Service name
+FTP
+Label
+Port number
+21
+Service name
+FTP
+Label
+Port number
+989
+Service name
+FTP
+Label
+Port number
+990
+Service name
+FTP
+Label
+Port number
+22
+Service name
+SSH
+Label
+Port number
+23
+Service name
+Telnet
+Label
+Port number
+992
+Service name
+Telnet
+Label
+Port number
+25
+Service name
+Mail
+Label
+Port number
+110
+Service name
+Mail
+Label
+Port number
+143
+Service name
+Mail
+Label
+Port number
+220
+Service name
+Mail
+Label
+Port number
+993
+Service name
+Mail
+Label
+Port number
+995
+Service name
+Mail
+Label
+Port number
+53
+Service name
+DNS
+Label
+Port number
+194
+Service name
+IRC
+Label
+Port number
+994
+Service name
+IRC
+Label
+Port number
+873
+Service name
+RSYNC
+Add Port 
+Add Group 
+Primary Responder mode (Warning)
+FIPS (Warning)
+Hostname
+Contact
+Location
+Description
+Banner
+Pre-login banner
+Timezone
+UTC
+Resynchronization interval
+1d
+Label
+Type of time source
+NTP
+Enable the time source
+Server
+time.devicecloud.com
+Add Server 
+Add Source 
+Heartbeat interval
+30m
+Enable informational events
+Enable email notifications
+Enable SNMP traps
+Enable error events
+Enable informational events
+Enable email notifications
+Enable SNMP traps
+Enable error events
+Enable status events
+Status interval
+30m
+Enable email notifications
+Enable SNMP traps
+Enable error events
+Enable informational events
+Enable email notifications
+Enable SNMP traps
+Enable informational events
+Enable email notifications
+Enable SNMP traps
+Enable status events
+Status interval
+5m
+Enable email notifications
+Enable SNMP traps
+Enable status events
+Status interval
+30m
+Enable email notifications
+Enable SNMP traps
+Enable informational events
+Enable email notifications
+Enable SNMP traps
+Enable status events
+Status interval
+5m
+Enable email notifications
+Enable SNMP traps
+Enable status events
+Status interval
+30m
+Enable email notifications
+Enable SNMP traps
+Enable informational events
+Enable status events
+Status interval
+30m
+Enable email notifications
+Enable SNMP traps
+Enable error events
+Enable informational events
+Enable email notifications
+Enable SNMP traps
+Enable status events
+Status interval
+5m
+Enable email notifications
+Enable SNMP traps
+Enable informational events
+Enable email notifications
+Enable SNMP traps
+Enable informational events
+Enable email notifications
+Enable SNMP traps
+Enable informational events
+Enable email notifications
+Enable SNMP traps
+Enable informational events
+Enable email notifications
+Enable SNMP traps
+Enable error events
+Enable email notifications
+Enable SNMP traps
+System log rotation size
+200
+System log rotation count
+8
+Add Server 
+Preserve system logs
+Enable
+Server type
+SMTP with StartTLS encryption
+SMTP server name
+SMTP server port
+587
+Server user name
+Server password
+Email from address
+Email to address
+Email subject
+Device Notification
+Enable
+Add Destination 
+Reboot time
+Reboot window
+10m
+Add Maintenance window trigger 
+Maintenance window trigger condition
+All trigger
+Device firmware update
+Modem firmware update
+Device firmware update check
+Modem firmware update check
+Frequency
+Daily
+Allow scheduled scripts to handle SMS
+Enable
+Label
+ENIP_discover
+Run mode
+On boot
+Commands
+socat UDP4-RECVFROM:44818,broadcast,fork UDP4-SENDTO:192.168.81.7:44818
+Log script output
+Log script errors
+Maximum memory
+Sandbox
+Exit action
+Restart script
+Once
+Add Script 
+Profile
+Performance
+LEDs enabled
+Add 
+Container
+ 
+Enable
+Watchdog test interval
+5m
+Number of test failures before a reboot
+2
+Enable memory check
+RAM usage threshold to trigger a warning
+90
+Percentage of system memory used before triggering a reboot
+95
+Log memory usage every interval
+Enable interface(s) down check
+Downtime
+15m
+Add Interface 
+Enable modem check
+Enable modem power cycle
+Downtime
+1h
