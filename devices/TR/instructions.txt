@@ -1,2 +1,6 @@
-Smile
-Say Hello
+Step 1: Connect TR to PC with Ethernet cable in LAN2 port
+Step 2: Connect TR to Ethernet Switch using the LAN3 port
+Step 3: Connect TR to BeagleBone Black using the WAN port.
+Step 4: Connect PC to BeagleBone Black using the USB cable.
+Step 5: Connect PLC to Ethernet Switch.
+Step 6: Connect HMI to Ethernet Switch.

@@ -1,9 +1,4 @@
-Step 1: Connect IX20 to 9-30 V DC power source
-Step 2: Connect IX20 to PC with Ethernet cable in ETH2 port
-Step 3: Select IX20 as device.
-Step 4: Select excel sheet that corresponds to the airport.
-Step 5: Select the gate.
-Step 6: Click into the text box. 
-Step 7: Scan the QR code or barcode on the device to input the device password and info.
-Step 8: Hit submit.
-Step 9: Hit Program Device.
+Step 1: Connect IX20 to Ethernet Switch with ETH2 Port
+Step 2: Connect PC to Ethernet Switch
+Step 3: Connect BeagleBone Black to Ethernet Switch
+Step 4: Connect BeagleBone Black to PC using USB cable
