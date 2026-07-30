@@ -1,0 +1,15 @@
+{
+    "bbb_ip": "192.168.7.2",
+    "bbb_user": "raj",
+    "bbb_password": "Jetway",
+    "router_temp_ip": "192.168.1.1",
+    "router_fallback_ip": "192.168.81.1",
+    "router_new_ip": "192.168.81.1",
+    "router_new_user": "admin",
+    "router_new_password": "Jetway@dm1n",
+    "firmware_filename": "RUTX_R_00.07.22.3_WEBUI.bin",
+    "template_gate_ip": "10.28.18.2",
+    "template_netmask": "255.255.255.0",
+    "ssh_timeout": 30,
+    "test_script_timeout": 60
+}
