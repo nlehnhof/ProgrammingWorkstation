@@ -39,6 +39,7 @@ print(default_pass, flush=True)
 ssh_router_ip = '192.168.2.1'
 ssh_router_user = 'admin'
 router_new_pswd = 'Jetway@dm1n'
+gate_subnet_prefix = "24"
 
 ssh_bbb = paramiko.SSHClient()
 ssh_router = paramiko.SSHClient()
@@ -87,7 +88,7 @@ def ssh_bbb_close():
 
 def ssh_router_connect():
     print("Connecting to Router")
-    global ssh_router, router_new_pswd, default_pass, sftp_router
+    global ssh_router_ip, ssh_router, router_new_pswd, default_pass, sftp_router
     print(default_pass, flush=True)
 
     ssh_router = paramiko.SSHClient()
@@ -141,7 +142,7 @@ def ssh_router_close():
 
 ## Change Router password to Jetway@dm1n
 def change_password():
-    global ssh_router, router_new_pswd, default_pass
+    global ssh_router, router_new_pswd, default_pass, ssh_router_ip
     print("Changing router password...", flush=True)
 
     ssh_router_connect()
@@ -275,68 +276,217 @@ def firmware_update():
     print("Firmware updated; reboot complete. Move to configurations.", flush=True)
 
 def configure():
-    global ssh_router, ssh_bbb, gate_ip, gate_gateway
-
     print("Configuring router...", flush=True)
+    
+    global ssh_bbb, ssh_router, gate_ip, sftp_bbb, ssh_router_ip, gate_subnet_prefix
 
+    # Enter BBB
+    ssh_bbb_connect()
+    time.sleep(1)
+
+    # Confirm IP
+    shell = ssh_bbb.invoke_shell()
+    time.sleep(1)
+    
+    # check ip addr show eth0 for 192.168.2....
+    output = ssh_bbb_run("ip addr show eth0")
+    pattern_ipv4 = r'\b192.\b168.\b2.\d{1,3}\b'
+    ips = re.findall(pattern_ipv4, output)
+    print(ips, flush=True)
+    if len(ips) > 1 and ips[0] != "192.168.2.255":
+        bbb_ip = ips[0]
+
+    # if not, sudo dhclient -v eth0
+    if len(ips) < 1:
+        print("192.168.2 not in output", flush=True)
+        try:
+            ssh_bbb_run("sudo -n /sbin/dhclient -v eth0")
+            time.sleep(10)
+            output = ssh_bbb_run("ip addr show eth0")
+            pattern_ipv4 = r'\b192.\b168.\b2.\d{1,3}\b'
+            ips = re.findall(pattern_ipv4, output)
+            print(ips, flush=True)
+            if len(ips) > 1 and ips[0] != "192.168.2.255":
+                bbb_ip = ips[0]
+        except Exception as e:
+            return print(f"Error: {e}")
+        # confirm ip addr eth0
+        if len(ips) < 1:
+            return print("Failed to find ip addr", flush=True)
+        bbb_ip = ips[0] if ips[0] != "192.168.2.1" else None
+        print(bbb_ip, flush=True)
+        if bbb_ip is None:
+            return print("Failed to get BBB IP correct.", flush=True)    
+
+    # Copy config file from pc to bbb (sftp)
+        # Enter PC terminal
+    # PC to BBB transfer file
+    try:
+        sftp_bbb.put('./devices/digiIX20/configs/99-CONFIG-BMS-asof-2026APR14-Digi-IX20-25.2.56.67.bin', '/home/raj/99-configs-2026-07-29.bin')
+        print("Firmware copied to BBB", flush=True)
+    except Exception as e:
+        return print(f"Error Here: {e}")
+    
+    # exit bbb
+    ssh_bbb_close()
+
+    # Connect to router
     ssh_router_connect()
-    shell = ssh_router.invoke_shell()
-    time.sleep(2)
-    if shell.recv_ready():
-        output = shell.recv(4096).decode("utf-8", errors = "ignore")
 
+    # Router pulls file from BBB
+    shell = ssh_router.invoke_shell()
+    time.sleep(1)
+    output = shell.recv(4096).decode()
+    print(output, flush=True)
+
+    # copy file to router from bbb
     shell.send(b"a\n")
     time.sleep(1)
-    output = shell.recv(4096).decode()
-    print(output, flush=True)
-    time.sleep(3)
-    shell.send(b"config\n")
+    shell.send(f"scp host {bbb_ip} user raj remote /home/raj/99-configs-2026-07-29.bin local /tmp/IX20-99-configs.bin to local\n".encode()) # type:ignore
+    time.sleep(2)
     output = shell.recv(4096).decode()
     print(output, flush=True)
     time.sleep(2)
-    shell.send(b"network interface eth2 ipv4\n")
-    time.sleep(2)
-    shell.send(b"address\n")
-    output = shell.recv(4096).decode()
-    print(output, flush=True)
+    shell.send("Jetway\n".encode())
+    time.sleep(12)
+
+    # confirm with ls \tmp\ that the config file is there
+    shell.send(b"ls /tmp/\n")
     time.sleep(1)
-    print(gate_ip, flush=True)
-    shell.send(f"address {gate_ip}/24\n".encode("utf-8"))
+    output = shell.recv(4096).decode()
+    print(output, flush=True)
+    if "IX20-99-configs.bin" not in output:
+        return print("Failed to copy over configuration file.", flush=True)
+    
+    # upload config to router
+    # system restore PATH/to/config/file
+    shell.send(b"system restore /tmp/IX20-99-configs.bin\n")
+    print("1 minute remaining...", flush=True)
+    time.sleep(60)
+    output = shell.recv(4096).decode()
+    print(output, flush=True)
+
+    # reboot
+    shell.send(b"reboot\n")
+    time.sleep(1)
+    output = shell.recv(4096).decode()
+    print(output, flush=True)
+
+    # wait
+    print("2 minutes remaining in reboot...", flush=True)
+    time.sleep(60)
+    print("1 minute remaining...", flush=True)
+    time.sleep(60)
+
+    # Find current Ethernet interface name and index
+    cmd_find = (
+        "powershell -Command \""
+        f"$gw='{ssh_router_ip}'; "
+        "Get-NetIPConfiguration | "
+        "Where-Object {$_.IPv4DefaultGateway -and $_.IPv4DefaultGateway.NextHop -eq $gw} | "
+        "Select -First 1 -ExpandProperty InterfaceIndex"
+        "\"\n"
+    )
+    shell.send(cmd_find.encode())
+    time.sleep(1)
+    output = shell.recv(4096).decode()
+    
+    match = re.search(r"\d+", output)
+    if not match:
+        raise Exception("Could not find interface index")
+    
+    iface_index = match.group(0)
+    print("Interface Index:", iface_index)
+
+    # remove existing IPs (DHCP cleanup)
+    cmd_remove = (
+        "powershell -Command \""
+        f"Get-NetIPAddress -InterfaceIndex {iface_index} | "
+        "Remove-NetIPAddress -Confirm:$false"
+        "\"\n"
+    )
+
+    shell.send(cmd_remove.encode())
+    time.sleep(1)
+
+    # Set static IP
+    cmd_set = (
+        "powershell -Command \""
+        f"New-NetIPAddress -InterfaceIndex {iface_index} "
+        f"-IPAddress {gate_ip}"
+        f"-PrefixLength {gate_subnet_prefix}"
+        f"-DefaultGateway {gate_gateway}"
+        "\"\n"
+    )
+
+    shell.send(cmd_set.encode())
+    time.sleep(1)
+
+    # confirm static ip addr
+    shell.send(b"ipconfig\n")
+    time.sleep(1)
+    output = shell.recv(8192).decode()
+
+    if gate_ip not in output:
+        return print("Failed to change static ip addr")
+
+    print("Continuing on... ", flush=True)
+
+    # connect to router with new ip addr (192.168.81.5 ; AAAaaa111!!!)
+    ssh_router_ip = "192.168.81.5"
+    router_new_pswd = "AAAaaa111!!!"
+    ssh_router_connect()
+    time.sleep(1)
+
+    # modify public ip address : config network interface eth1 ipv4
+    shell.send(b"a\n")
+    time.sleep(1)
+    shell.send(b"config\n")
+    time.sleep(1)
+    shell.send(b"network interface eth1 ipv4\n")
+    time.sleep(1)
+    shell.send(f"address {gate_ip}/24".encode())
     time.sleep(2)
+    shell.send(b"save")
+    time.sleep(1)
+
+    # check firewall rules
+    shell.send(b"config\n")
+    time.sleep(1)
+    # config firewall dnat
+    shell.send(b"firewall dnat\n")
+    time.sleep(1)
+    # show
+    shell.send(b"show\n")
+    time.sleep(1)
     output = shell.recv(4096).decode()
     print(output, flush=True)
 
-    if gate_gateway is not None:
-        shell.send(f"gateway {gate_gateway}\n".encode("utf-8"))
-        time.sleep(1)
-
+    # read output for port 44818 and label ENIP
+    modbus = False
+    enip = False
+    if "modbus" in output:
+        modbus = True
+    if "ENIP" in output:
+        enip = True
+    
+    if not modbus and not enip:
+        return print("Wrong rules", flush=True)
+    
     shell.send(b"save\n")
-    time.sleep(3)
-    output = shell.recv(4096).decode()
-    print(output, flush=True)
+    time.sleep(1)
     shell.send(b"exit\n")
-    time.sleep(3)
-    output = shell.recv(4096).decode()
-    print(output, flush=True)
+    time.sleep(1)
     shell.send(b"q\n")
     time.sleep(1)
-    output = shell.recv(4096).decode()
-    print(output, flush=True)
-    time.sleep(2)
 
-    shell.send(b"ipconfig /release\n")
-    time.sleep(4)
-    output = shell.recv(4096).decode()
-    print(output, flush=True)
-    shell.send(b"ipconfig /renew\n")
-    time.sleep(4)
-    output = shell.recv(4096).decode()
-    print(output, flush=True)
-    print("Router configuration is now complete.", flush=True)
-    shell.close()
+    ssh_router_close()
     time.sleep(1)
+
+    return print("Router configured correctly.", flush=True)
 
 print("Starting... ", flush=True)
 # firmware_update()
-change_password()
+# change_password() # change to Jetway@dm1n
+configure() # configuration changes router to 192.168.81.5 ; AAAaaa111!!!
 print("Done.", flush=True)
