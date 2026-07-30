@@ -348,7 +348,7 @@ def configure():
     print(output, flush=True)
     time.sleep(2)
     shell.send("Jetway\n".encode())
-    time.sleep(12)
+    time.sleep(60)
 
     # confirm with ls \tmp\ that the config file is there
     shell.send(b"ls /tmp/\n")
@@ -362,7 +362,7 @@ def configure():
     # system restore PATH/to/config/file
     shell.send(b"system restore /tmp/IX20-99-configs.bin\n")
     print("1 minute remaining...", flush=True)
-    time.sleep(60)
+    time.sleep(90)
     output = shell.recv(4096).decode()
     print(output, flush=True)
 
@@ -379,114 +379,114 @@ def configure():
     time.sleep(60)
 
     # Find current Ethernet interface name and index
-    cmd_find = (
-        "powershell -Command \""
-        f"$gw='{ssh_router_ip}'; "
-        "Get-NetIPConfiguration | "
-        "Where-Object {$_.IPv4DefaultGateway -and $_.IPv4DefaultGateway.NextHop -eq $gw} | "
-        "Select -First 1 -ExpandProperty InterfaceIndex"
-        "\"\n"
-    )
-    shell.send(cmd_find.encode())
-    time.sleep(1)
-    output = shell.recv(4096).decode()
+    # cmd_find = (
+    #     "powershell -Command \""
+    #     f"$gw='{ssh_router_ip}'; "
+    #     "Get-NetIPConfiguration | "
+    #     "Where-Object {$_.IPv4DefaultGateway -and $_.IPv4DefaultGateway.NextHop -eq $gw} | "
+    #     "Select -First 1 -ExpandProperty InterfaceIndex"
+    #     "\"\n"
+    # )
+    # shell.send(cmd_find.encode())
+    # time.sleep(1)
+    # output = shell.recv(4096).decode()
     
-    match = re.search(r"\d+", output)
-    if not match:
-        raise Exception("Could not find interface index")
+    # match = re.search(r"\d+", output)
+    # if not match:
+    #     raise Exception("Could not find interface index")
     
-    iface_index = match.group(0)
-    print("Interface Index:", iface_index)
+    # iface_index = match.group(0)
+    # print("Interface Index:", iface_index)
 
-    # remove existing IPs (DHCP cleanup)
-    cmd_remove = (
-        "powershell -Command \""
-        f"Get-NetIPAddress -InterfaceIndex {iface_index} | "
-        "Remove-NetIPAddress -Confirm:$false"
-        "\"\n"
-    )
+    # # remove existing IPs (DHCP cleanup)
+    # cmd_remove = (
+    #     "powershell -Command \""
+    #     f"Get-NetIPAddress -InterfaceIndex {iface_index} | "
+    #     "Remove-NetIPAddress -Confirm:$false"
+    #     "\"\n"
+    # )
 
-    shell.send(cmd_remove.encode())
-    time.sleep(1)
+    # shell.send(cmd_remove.encode())
+    # time.sleep(1)
 
-    # Set static IP
-    cmd_set = (
-        "powershell -Command \""
-        f"New-NetIPAddress -InterfaceIndex {iface_index} "
-        f"-IPAddress {gate_ip}"
-        f"-PrefixLength {gate_subnet_prefix}"
-        f"-DefaultGateway {gate_gateway}"
-        "\"\n"
-    )
+    # # Set static IP
+    # cmd_set = (
+    #     "powershell -Command \""
+    #     f"New-NetIPAddress -InterfaceIndex {iface_index} "
+    #     f"-IPAddress {gate_ip}"
+    #     f"-PrefixLength {gate_subnet_prefix}"
+    #     f"-DefaultGateway {gate_gateway}"
+    #     "\"\n"
+    # )
 
-    shell.send(cmd_set.encode())
-    time.sleep(1)
+    # shell.send(cmd_set.encode())
+    # time.sleep(1)
 
-    # confirm static ip addr
-    shell.send(b"ipconfig\n")
-    time.sleep(1)
-    output = shell.recv(8192).decode()
+    # # confirm static ip addr
+    # shell.send(b"ipconfig\n")
+    # time.sleep(1)
+    # output = shell.recv(8192).decode()
 
-    if gate_ip not in output:
-        return print("Failed to change static ip addr")
+    # if gate_ip not in output:
+    #     return print("Failed to change static ip addr")
 
-    print("Continuing on... ", flush=True)
+    # print("Continuing on... ", flush=True)
 
-    # connect to router with new ip addr (192.168.81.5 ; AAAaaa111!!!)
-    ssh_router_ip = "192.168.81.5"
-    router_new_pswd = "AAAaaa111!!!"
-    ssh_router_connect()
-    time.sleep(1)
+    # # connect to router with new ip addr (192.168.81.5 ; AAAaaa111!!!)
+    # ssh_router_ip = "192.168.81.5"
+    # router_new_pswd = "AAAaaa111!!!"
+    # ssh_router_connect()
+    # time.sleep(1)
 
-    # modify public ip address : config network interface eth1 ipv4
-    shell.send(b"a\n")
-    time.sleep(1)
-    shell.send(b"config\n")
-    time.sleep(1)
-    shell.send(b"network interface eth1 ipv4\n")
-    time.sleep(1)
-    shell.send(f"address {gate_ip}/24".encode())
-    time.sleep(2)
-    shell.send(b"save")
-    time.sleep(1)
+    # # modify public ip address : config network interface eth1 ipv4
+    # shell.send(b"a\n")
+    # time.sleep(1)
+    # shell.send(b"config\n")
+    # time.sleep(1)
+    # shell.send(b"network interface eth1 ipv4\n")
+    # time.sleep(1)
+    # shell.send(f"address {gate_ip}/24".encode())
+    # time.sleep(2)
+    # shell.send(b"save")
+    # time.sleep(1)
 
-    # check firewall rules
-    shell.send(b"config\n")
-    time.sleep(1)
-    # config firewall dnat
-    shell.send(b"firewall dnat\n")
-    time.sleep(1)
-    # show
-    shell.send(b"show\n")
-    time.sleep(1)
-    output = shell.recv(4096).decode()
-    print(output, flush=True)
+    # # check firewall rules
+    # shell.send(b"config\n")
+    # time.sleep(1)
+    # # config firewall dnat
+    # shell.send(b"firewall dnat\n")
+    # time.sleep(1)
+    # # show
+    # shell.send(b"show\n")
+    # time.sleep(1)
+    # output = shell.recv(4096).decode()
+    # print(output, flush=True)
 
-    # read output for port 44818 and label ENIP
-    modbus = False
-    enip = False
-    if "modbus" in output:
-        modbus = True
-    if "ENIP" in output:
-        enip = True
+    # # read output for port 44818 and label ENIP
+    # modbus = False
+    # enip = False
+    # if "modbus" in output:
+    #     modbus = True
+    # if "ENIP" in output:
+    #     enip = True
     
-    if not modbus and not enip:
-        return print("Wrong rules", flush=True)
+    # if not modbus and not enip:
+    #     return print("Wrong rules", flush=True)
     
-    shell.send(b"save\n")
-    time.sleep(1)
-    shell.send(b"exit\n")
-    time.sleep(1)
-    shell.send(b"q\n")
-    time.sleep(1)
+    # shell.send(b"save\n")
+    # time.sleep(1)
+    # shell.send(b"exit\n")
+    # time.sleep(1)
+    # shell.send(b"q\n")
+    # time.sleep(1)
 
-    ssh_router_close()
-    time.sleep(1)
+    # ssh_router_close()
+    # time.sleep(1)
 
     return print("Router configured correctly.", flush=True)
 
 print("Starting... ", flush=True)
-# firmware_update()
+firmware_update()
 # change_password() # change to Jetway@dm1n
 configure() # configuration changes router to 192.168.81.5 ; AAAaaa111!!!
 print("Done.", flush=True)

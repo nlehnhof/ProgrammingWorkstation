@@ -36,6 +36,10 @@ l_pause = 2
 dropdown = None
 valid_ip = True
 
+gate_ip = None
+gate_gateway = None
+gate_netmask = None
+
 def ssh_bbb_connect():
     print("Connecting to BBB", flush=True)
     global ssh_bbb, sftp_bbb
@@ -112,8 +116,7 @@ def validate_subnet(ip_str, netmask_str):
 
     
 def lookup_excel(sheet, gate, device):
-    path = os.path.join(f"devices/{device}", sheet)
-    file_path = os.path.join(os.getcwd(), path)
+    file_path = os.path.join(os.getcwd(), sheet)
     # file_path = sheet
     to_find = gate
 
@@ -155,6 +158,9 @@ def lookup_excel(sheet, gate, device):
         import traceback; traceback.print_exc()
 
 def run_main_script(airport, gate, temp_pass, device):
+
+    global gate_netmask, gate_ip, gate_gateway
+
     dir_path = os.path.dirname(f"devices/{device}/prog_dev.py")
     print("Directory path:", dir_path)
     script_path = os.path.join(dir_path, "teltonika.py")
@@ -212,7 +218,7 @@ def run_main_script(airport, gate, temp_pass, device):
                     # excel_name = excel.removesuffix(".xlsx") # type:ignore
                     excel_name = airport
                     print("Airport: ", airport, flush=True)
-                    filename_crash = f"crash_log_{excel_name}_{gate}_{timestamp}.txt"
+                    filename_crash = f"crash_log_{device}_{excel_name}_{gate}_{timestamp}.txt"
                     filepath = os.path.join(crash_folder, filename_crash)
 
                     with open(filepath, "w") as file:
@@ -268,7 +274,7 @@ def run_main_script(airport, gate, temp_pass, device):
                     os.makedirs(router_labels, exist_ok=True)
                     excel_name = airport
 
-                    filename_label = f"label_{airport}_{gate}_{timestamp}.txt"
+                    filename_label = f"label_{device}_{airport}_{gate}_{timestamp}.txt"
                     filepath = os.path.join(router_labels, filename_label)
 
                     wb = openpyxl.load_workbook(excel)
@@ -305,13 +311,7 @@ def run_main_script(airport, gate, temp_pass, device):
                     with open(filepath, "w") as file:
                         print("Writing Label Info")
                         first_line = "GATE " + str(gate_num) +" SN" + str(bridge_serial) + "," + "PN: " + str(router_num) + "," + "MA: " + str(mac_addr) + "," + "IP: " + str(gate_ip) # type:ignore
-                        # second_line = "PN: " + str(router_num) + ","
-                        # third_line = "MA: " + str(mac_addr) + ","
-                        # fourth_line = "IP: " + str(gate_ip) + ","
                         file.write(first_line)
-                        # file.write(second_line)
-                        # file.write(third_line)
-                        # file.write(fourth_line)
                         
                     with open(filepath, "r") as file:
                         print("Label File Contents")
@@ -630,7 +630,11 @@ def run_test_script(device_path, device, airport, excel, gate):
     output4 = None
     test_error = None
     
-    lookup_excel(airport+".xlsx", gate, device)
+    dir_path = os.path.dirname(f"devices/{device}/prog_dev.py")
+    print("Directory path:", dir_path)
+    sheet = os.path.join(dir_path, airport+".xlsx")
+
+    lookup_excel(sheet, gate, device)
 
     if valid_ip == False:
         print("Invalid IP!")
