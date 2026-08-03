@@ -1,46 +1,58 @@
 # Programming Workstation — Documentation
 
-**Version:** 1.0 · **Branch:** `sparse` · **Last commit:** `2e84f6c` — "DOCS.md file" (2026-07-30)
+**Version:** 1.1 · **Branch:** `sparse` · **Last commit:** `95a372e` — "Update WORKFLOW.md and CODE_EXPLAIN.md for ccd15af" (2026-08-03 10:59)
 
 *Doc style note: formal structure with easy-to-read explanations, Mermaid diagrams for workflow, and `file:line` citations (no inline code excerpts). Set by user preference when this folder was created.*
 
 ## Overview
 
-The Programming Workstation is a PyQt5 desktop app that walks a technician through provisioning field devices — today, a Teltonika RUTX08 router used in airport gate-control installations, plus an early-stage Digi IX20 implementation. The operator registers a device type, confirms hardware wiring, picks an airport/gate from an Excel sheet, and the app runs that device's programming script (firmware flash, config push, functional test), then writes a label file and updates the Excel log.
+The Programming Workstation is a PyQt5 desktop app that walks a technician through provisioning field devices — a Teltonika RUTX08 router (`devices/TR/`) and a Digi IX20 router (`devices/digiIX20/`), both used in airport gate-control installations. The operator registers a device type, confirms hardware wiring, picks an airport/gate from an Excel sheet, and the app runs that device's programming script (firmware flash, config push, functional test), then writes a label file and updates the Excel log. Programming runs on a background thread, and a live Status panel shows each milestone turning green PASS or red FAIL as it completes.
 
-**Important context for anyone reading these docs:** this repository is mid-refactor. A shared, tested utility layer (`resources/utilities/`) and a set of higher-level docs (`DOCUMENTATION_OVERVIEW.md`, `devices/TR/TR_DEVICE_DOCUMENTATION.md`) describe a target architecture — pooled SSH sessions, header-based Excel lookups, layered config precedence. The actual production script for the TR device (`devices/TR/teltonika.py`, `devices/TR/prog_dev.py`) has **not** been updated to use that layer yet: it still opens raw `paramiko` connections, hardcodes credentials, and reads Excel columns by position. This documentation set describes the code as it actually runs today, and calls out the gap explicitly where it matters — see `CODE_EXPLAIN.md`.
+**Important context for anyone reading these docs:** the two device implementations are at different stages, and the difference matters constantly.
+
+- **`devices/digiIX20/`** was rewritten in `ccd15af` onto the shared utility layer: pooled `SSHSession` connections, completion-driven waits (`wait_utils`), layered config precedence (`device_config.json` + `DIGIIX20_*` env vars), and header-based Excel lookups.
+- **`devices/TR/`** has **not** been migrated. `teltonika.py` and `prog_dev.py` still open raw `paramiko` connections, wait on fixed `time.sleep()` calls, hardcode credentials, and read Excel columns by position. `devices/TR/device_config.json` exists but nothing reads it, so `TR_*` environment variables have no effect.
+
+This documentation set describes the code as it actually runs today and flags that split wherever it is load-bearing. The Digi implementation is the reference for migrating TR.
+
+## Where to start
+
+- **New machine, nothing installed yet?** → `../SETUP.md` (repo root) — prerequisites, virtual environment, administrator rights, building the .exe, and a verification checklist.
+- **Repo already runs, want to use it?** → `INSTRUCTIONS.md`
+- **Want to understand how it fits together?** → `WORKFLOW.md`, then `CODE_EXPLAIN.md`
 
 ## Files in this folder
 
-**WORKFLOW.md** : Traces page-to-page navigation, the device-programming call chain (including the `exec()`-based script loading), and the config-loading precedence — with Mermaid diagrams.
-Keywords: stacked widget, navigation, `exec()`, subprocess, data flow, config precedence.
+**WORKFLOW.md** : Traces application startup, page-to-page navigation, and the full device-programming call chain — the background worker thread, the `exec()`-based script loading, the `##STATUS##` milestone protocol, and config precedence. Also covers how the app locates its data when run from source versus as a packaged .exe.
+Keywords: stacked widget, navigation, `QThread`, `exec()`, subprocess, `##STATUS##`, config precedence, `app_root`, packaging.
 Questions answered:
 1. How does the user move between pages, and what triggers each transition?
 2. What actually happens, file by file, when "Program Device" is clicked?
-3. Why does `devices/TR/prog_dev.py` run via `exec()` instead of a normal import?
-4. How does device configuration get resolved (and which scripts actually use that resolution)?
-5. Where do crash logs, labels, and Excel updates get written?
+3. Why does `prog_dev.py` run via `exec()` instead of a normal import, and what is in its namespace?
+4. How do milestone updates get from the hardware script to the Status panel?
+5. How does the app find `devices/` when it is packaged as an .exe?
 
-**CODE_EXPLAIN.md** : Function-level walkthrough of every source file in the app (excluding `devices/TR/`, which has its own nested documentation folder), with a complexity rating per file.
-Keywords: `DeviceManager`, `SSHSession`, `ManagedShell`, `extract_mac`, error handling, `QStackedWidget`.
+**CODE_EXPLAIN.md** : Function-level walkthrough of every source file in the app (excluding `devices/TR/`, which has its own nested documentation folder), with a complexity rating per file. Opens with a "New in `ccd15af`" section explaining why each recently added module exists.
+Keywords: `DeviceManager`, `ProgramWorker`, `StatusPanel`, `SSHSession`, `wait_utils`, `app_paths`, `elevate`, error handling.
 Questions answered:
-1. What does each file in `core/`, `pages/`, `device_types/`, and `resources/utilities/` actually do?
-2. Which of the "new" `resources/utilities/` functions are actually wired into the app, versus only covered by tests?
-3. Where are the known bugs and copy-paste artifacts (stale header comments, hardcoded paths)?
-4. What triggers the global error dialog and where do crash logs get written?
+1. What does each file in `core/`, `pages/`, `device_types/`, `resources/utilities/`, and `devices/digiIX20/` actually do?
+2. Which shared utilities are wired into which device, versus only covered by tests?
+3. Where are the known bugs and copy-paste artifacts (stale header comments, mismatched asset paths)?
+4. What triggers the global error dialog, and where do crash logs get written?
 5. Is `device_types/` (the `Device` abstract base class) actually used?
 
-**INSTRUCTIONS.md** : Setup and a first-run walkthrough for a developer or operator, with warnings and an FAQ.
-Keywords: setup, venv, pytest, running the app, adding a device type.
+**INSTRUCTIONS.md** : Day-to-day usage for a developer or operator already set up — a first-run walkthrough, warnings, how to add a device type, and an FAQ. For first-time setup on a new machine, see `../SETUP.md` instead.
+Keywords: running the app, pytest, Status panel, `checklist.json`, adding a device type, administrator rights.
 Questions answered:
-1. How do I get the app running locally?
-2. How do I run the test suite, and why does it fail if I use the wrong Python?
-3. How do I add a brand-new device type?
+1. How do I run the app and the test suite, and which test failures are expected?
+2. What does a programming run look like from the operator's side?
+3. How do I add a brand-new device type, with or without a live checklist?
 4. What are the known footguns before I touch device automation code?
-5. What's left to do / known bugs worth fixing?
+5. Why do `TR_*` environment variables do nothing?
 
 ## Related documentation
 
-- `devices/TR/documentation/` — nested documentation folder for the Teltonika RUTX08 device implementation specifically (it's substantial enough, and self-contained enough, to warrant its own set).
+- `../SETUP.md` — first-time setup on a device that has never run this before: prerequisites, environment creation, UAC/administrator behaviour, building and staging the packaged .exe.
+- `devices/TR/documentation/` — nested documentation folder for the Teltonika RUTX08 device implementation specifically (it's substantial enough, and self-contained enough, to warrant its own set). Note it predates `ccd15af` and does not describe the shared-utility migration, which TR has not undergone anyway.
 - `../DOCUMENTATION_OVERVIEW.md` and `../devices/TR/TR_DEVICE_DOCUMENTATION.md` — pre-existing docs describing the target/aspirational architecture. Useful for understanding *where the refactor is headed*, but not an accurate description of what currently runs.
-- `../resources/documentation/DOCS.md` — the original documentation style guide this folder's rules are based on.
+- `../resources/documentation/DOCS.md` — the documentation style guide this folder's rules are based on.
