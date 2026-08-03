@@ -25,6 +25,8 @@ import argparse
 import socket
 import select
 
+from resources.utilities.app_paths import script_command
+
 start_time = time.perf_counter()
 current = os.getcwd()
 print("current dir:", os.getcwd())
@@ -189,7 +191,7 @@ def run_main_script(airport, gate, temp_pass, device):
         raise FileNotFoundError(f"Script not found: {script_path}")
     print("Running teltonika.py...", flush=True)
 
-    process = subprocess.Popen([sys.executable, script_path, str(gate_ip), str(gate_netmask), str(gate_gateway), str(temp_pass)], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+    process = subprocess.Popen(script_command(script_path, gate_ip, gate_netmask, gate_gateway, temp_pass), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
     for line in process.stdout: # type:ignore
         print(line, end="")
 

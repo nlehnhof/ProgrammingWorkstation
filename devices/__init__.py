@@ -1,7 +1,13 @@
-from pathlib import Path
+"""Registry of available device folders.
 
-current_dir = Path(__file__).parent
-registered_devices = [p.name for p in current_dir.iterdir() if p.is_dir() and p.name != "__pycache__"]
+Scans `app_root()/devices` at import time rather than this package's own
+directory, so a built exe reads the device folder sitting beside it. That is
+what lets a new device be added by dropping in a folder -- no rebuild.
+"""
+
+from resources.utilities.app_paths import registered_devices as _scan
+
+registered_devices = _scan()
 
 __all__ = ["registered_devices"]
 

@@ -7,8 +7,9 @@ import re
 import threading
 
 #GUI
-import tkinter as tk
-from tkinter import messagebox
+# tkinter imports removed: unused here, left over from history/dashboard.py.
+# They forced tcl/tk into the packaged build and broke it (tkinter.messagebox
+# is a submodule PyInstaller does not collect automatically).
 import time
 import ipaddress
 

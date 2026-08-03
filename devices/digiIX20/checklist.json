@@ -1,0 +1,12 @@
+{
+    "device_image": null,
+    "steps": [
+        {"id": "check_ip",    "label": "Checking IP",         "estimate": "~15 sec"},
+        {"id": "firmware_1",  "label": "Firmware #1 install", "estimate": "~4 min"},
+        {"id": "reboot_1",    "label": "First reboot",        "estimate": "~2 min"},
+        {"id": "config_push", "label": "Configuration push",  "estimate": "~4 min"},
+        {"id": "static_ip",   "label": "Switching static IP", "estimate": "~30 sec"},
+        {"id": "change_ip",   "label": "Changing IP address", "estimate": "~1 min"},
+        {"id": "testing",     "label": "Testing",             "estimate": "~1 min"}
+    ]
+}

@@ -52,9 +52,9 @@ class LogDialog(QDialog):
                 f.write(f"{'-'*40}\n")
                 f.write(text)
                 f.write(f"\n{'-'*40}\n")
-            sys.__stdout__.write(f"[INFO] Log saved: {LOG_FILE}\n") # type:ignore
-        except Exception as e: 
-            sys.__stderr__.write(f"[ERROR] Failed to save log: {e}\n") # type: ignore
+            _write_raw(sys.__stdout__, f"[INFO] Log saved: {LOG_FILE}\n")
+        except Exception as e:
+            _write_raw(sys.__stderr__, f"[ERROR] Failed to save log: {e}\n")
 
 
 def _collect_output(message, is_error=False):
@@ -69,7 +69,7 @@ def _collect_output(message, is_error=False):
             dlg = LogDialog(title="Error Detected")
             dlg.exec_()  # Show popup but don't exit
         else:
-            sys.__stdout__.write("\n".join(_output_buffer) + "\n") # type: ignore
+            _write_raw(sys.__stdout__, "\n".join(_output_buffer) + "\n")
 
 
 # ---------------- Exception Hooks ----------------
@@ -94,6 +94,22 @@ def asyncio_exception_handler(loop, context):
 
 
 # ---------------- Output Capture ----------------
+def _write_raw(stream, message):
+    """Write straight to a real stream, tolerating there not being one.
+
+    In a windowed build (PyInstaller console=False) sys.stdout/sys.stderr and
+    their __stdout__/__stderr__ originals are all None, so any print() would
+    otherwise raise AttributeError. The log file and dialog still work.
+    """
+    if stream is None:
+        return
+    try:
+        stream.write(message)
+    except (ValueError, OSError):
+        # Stream closed or detached -- logging must never break the app.
+        pass
+
+
 class StreamInterceptor:
     """Redirects stdout/stderr to also log output."""
     def __init__(self, original_stream, is_error=False):
@@ -103,10 +119,14 @@ class StreamInterceptor:
     def write(self, message):
         if message.strip():
             _collect_output(message.strip(), is_error=self.is_error)
-        self.original_stream.write(message)
+        _write_raw(self.original_stream, message)
 
     def flush(self):
-        self.original_stream.flush()
+        if self.original_stream is not None:
+            try:
+                self.original_stream.flush()
+            except (ValueError, OSError):
+                pass
 
 
 # ---------------- Subprocess Wrapper ----------------
