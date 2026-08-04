@@ -3,9 +3,9 @@
 **Version:** 2.1 · **Last updated:** 2026-08-04 (teltonika.py migration)
 
 > **Setting up a machine that has never run this before?** Start with
-> [`../SETUP.md`](../SETUP.md). This file assumes the repo already runs.
+> [`SETUP.md`](SETUP.md). This file assumes the repo already runs.
 >
-> **Not a programmer?** [`../cheat_sheet.md`](../cheat_sheet.md) explains what this
+> **Not a programmer?** [`CHEAT_SHEET.md`](CHEAT_SHEET.md) explains what this
 > app is and how it works in one page, without code.
 
 ## Setup
@@ -58,7 +58,7 @@ A failed run deliberately produces **no label**. A printable label for a router 
 
 ## Warnings
 
-- **Programming a Digi IX20 needs administrator rights.** The flow reconfigures this PC's network adapter, so the app relaunches itself elevated on startup (UAC prompt). Decline it and everything still runs except the **Switching static IP** milestone, which fails with an explanatory message. See `../SETUP.md` §5.
+- **Programming a Digi IX20 needs administrator rights.** The flow reconfigures this PC's network adapter, so the app relaunches itself elevated on startup (UAC prompt). Decline it and everything still runs except the **Switching static IP** milestone, which fails with an explanatory message. See `SETUP.md` §5.
 - **Credentials are stored in plaintext.** `core/devices.json` and each `devices/*/device_config.json` are not encrypted or masked. This is a known, documented limitation, not an oversight.
 - **A cancelled Digi run can leave the PC on a static IP.** `digix20.py` restores DHCP in a `finally` block, but force-killing the app skips it. Fix via Settings → Network → adapter → IPv4 → Obtain automatically.
 - **Close the spreadsheet before running.** If the airport `.xlsx` is open in Excel, the run completes but the save fails; you get a message saying so, and the label file still exists on disk.
@@ -66,17 +66,54 @@ A failed run deliberately produces **no label**. A printable label for a router 
 
 ## Adding a new device type
 
-A device is a **folder**, not a class — there is no base class to subclass.
+A device is a **folder**, not a class — there is no base class to subclass. Because nothing is enforced by an interface, the app instead relies on a handful of names and file locations being exactly right. Get one wrong and the failure is usually silent or misleading, so the rules come first.
 
-1. Create `devices/{NAME}/` with a `prog_dev.py` exposing `run_main_script(airport, gate, temp_pass, device)`. This is what `ProgramWorker.run` calls after `exec()`-loading the file. Note it will have no reliable `__file__` — resolve paths with `app_paths.device_dir(device)`.
-2. Add an `instructions.txt` (one cabling step per line; these become the checkboxes gating the Program button) and the airport `.xlsx` sheets the device needs. Sheets must carry the standard header row — see `devices/digiIX20/IP_TEMPLATE.xlsx`.
+### The rules — what the app requires by name
+
+These are hard requirements, each enforced by a specific line of code. Nothing checks them ahead of time; you find out at run time.
+
+| Rule | Enforced at | What you see if you break it |
+| --- | --- | --- |
+| The programming file is named **exactly `prog_dev.py`**, directly inside `devices/{NAME}/` | `pages/program_page.py:196` | Dialog: "No `prog_dev.py` found for '{device}'." The run never starts. |
+| It defines a module-level function named **exactly `run_main_script`** | `pages/program_page.py:46` | `KeyError: 'run_main_script'` in the error log, after the operator has already pressed Program |
+| `run_main_script` takes **four positional parameters**, in the order `(airport, gate, temp_pass, device)` | `pages/program_page.py:46` | `TypeError` about argument count, in the error log |
+| `instructions.txt` exists and holds **at least one non-blank line** | `pages/program_page.py:269–290` | The Program button stays greyed out forever — see the trap below |
+| Airport sheets are `.xlsx` in the device folder, carrying the standard header row | `excel_utils.get_excel_files` / `get_dropdown` | Empty Airport or Gate dropdown |
+
+The parameter names are yours to choose — the call is positional — but the order and the meaning are fixed:
+
+| Position | Value passed | Note |
+| --- | --- | --- |
+| 1 | Airport sheet **filename**, including `.xlsx` | Not the airport name. Both devices do `airport.removesuffix(".xlsx")` when they need the bare name. |
+| 2 | Gate identifier, as shown in the Gate dropdown | Read from the `PBB SN` column |
+| 3 | Temporary device password | Parsed out of the scanned QR text (`PW:...;`), else the raw text |
+| 4 | Registered device name, which is also the folder name | Use it with `app_paths.device_dir(device)` |
+
+### Four traps in how `prog_dev.py` is loaded
+
+`prog_dev.py` is not imported. `ProgramWorker.run` reads the file and runs `exec(code, namespace)` on it (`pages/program_page.py:41–46`), which changes four things:
+
+1. **There is no reliable `__file__`.** Resolve every path from `app_paths.device_dir(device)` or `app_root()`. A relative path resolves against the app's working directory, not the device folder.
+2. **Module-level code runs the moment Program is pressed**, before `run_main_script` is called. Keep the top of the file to imports and constants; anything expensive or side-effecting there runs inside the worker thread with no milestone reporting around it.
+3. **`progress_callback` is injected into the namespace, not passed as an argument.** Reach it with `globals().get("progress_callback")` and wrap it in `status.forwarder(...)`, which tolerates its absence — that is what keeps the module runnable outside the GUI. Both devices open with exactly `report = status.forwarder(globals().get("progress_callback"))`.
+4. **`sys.exit()` is treated as success.** `ProgramWorker.run` catches `SystemExit` and emits `finished_ok` (`:47–50`), deliberately, so a device script can't take the app down. Signal failure by **raising** out of `run_main_script` — the worker turns any other exception into the `failed` signal, the error log and a dialog. `digiIX20` raises `DigiProgrammingError` for this.
+
+### The `instructions.txt` trap
+
+A device with no `instructions.txt`, or one containing only blank lines, **can never be programmed** — the Program button stays disabled with no error shown anywhere.
+
+The cause: `load_instructions` ends by disabling the button (`:284`), and the only thing that re-enables it is `update_button_state`, which is wired solely to the `stateChanged` signal of the checkboxes built from that file (`:279`). No lines means no checkboxes, which means nothing can ever call it. So although the file is nominally a list of cabling steps, treat it as a required part of the contract.
+
+### Walkthrough
+
+1. Create `devices/{NAME}/` with a `prog_dev.py` satisfying the rules above. `devices/digiIX20/prog_dev.py` is 104 lines and is the reference to copy.
+2. Add an `instructions.txt` (one cabling step per line; these become the checkboxes gating the Program button) and the airport `.xlsx` sheets the device needs. Sheets must carry the standard header row — see `devices/digiIX20/IP_TEMPLATE.xlsx`. Note that `get_excel_files` hides two things from the Airport dropdown: Excel's `~$` lock files, and any sheet named `oshkosh_log.xlsx`.
 3. Use the shared layer rather than writing your own:
    - `excel_utils.lookup_excel(path, gate)` for the gate's network settings.
    - `status.watch_process(command, report)` to run your hardware script and consume its output.
    - `reporting.record_result(...)` for the crash log, sheet stamp and label.
    - `ssh_session.SSHSession` and `wait_utils` for anything touching hardware.
-   `devices/digiIX20/prog_dev.py` is 104 lines and is the reference to copy.
-4. Optionally add a `checklist.json` to get the live Status panel — see `devices/digiIX20/checklist.json`. Your hardware script then calls `status.running("step_id")` / `status.passed(...)` / `status.failed(...)`, and the markers reach the GUI automatically. Without this file the panel is simply empty.
+4. Optionally add a `checklist.json` to get the live Status panel — see `devices/digiIX20/checklist.json`. Your hardware script then calls `status.running("step_id")` / `status.passed(...)` / `status.failed(...)`, and the markers reach the GUI automatically. Without this file the panel is simply empty. **The `id` in each checklist entry must match the `step_id` your script emits**, character for character: `StatusPanel.update_step` returns silently on an id it doesn't recognise (`pages/status_panel.py:255`), so a typo shows up as a row that never moves off `PENDING` rather than as an error.
 5. Optionally add a `device_config.json` and call `device_config.load_config(dir, env_prefix="{NAME}_")`. Put new tunables in the JSON file; reach for an env var only when the value genuinely differs per deployment machine.
 6. Launch child scripts with `app_paths.script_command(...)` rather than `[sys.executable, ...]` — in a packaged build `sys.executable` is the app itself, not Python.
 7. Register it via **Add Device** in the running app (writes `core/devices.json` and copies the folder). No rebuild is needed for a packaged install: `devices/` lives beside the .exe.
@@ -112,4 +149,4 @@ A: That device has no `checklist.json`. Both `digiIX20` and `TR` ship one; a dev
 A: The crash log couldn't be written (usually a permissions problem on `crash_logs/`). The failure is still recorded by the red timestamp — `reporting.write_crash_log` never raises, because losing the log must not also lose the sheet update.
 
 **Q: Whatever happened to `device_types/`?**
-A: Deleted in `e96074a`. All four files were entirely commented out, and the three pages importing the package pulled in no symbols from it. Devices are folders; that was always the real extension mechanism.
+A: Deleted in `e96074a`. The four files held working code, but nothing used it — `core/manager.py` and `pages/add_device_page.py` imported `Device` and `SSHDevice` without ever instantiating them, and three pages did `from device_types import *` for no symbols they referenced. Devices are folders; that was always the real extension mechanism.

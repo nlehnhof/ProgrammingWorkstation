@@ -2,7 +2,7 @@
 
 **Last commit:** `e96074a` (2026-08-04) — "Simplify onto a shared utility layer; delete dead abstractions"
 
-This file explains how the application's files interact at a navigation and data-flow level. For function-by-function detail, see `CODE_EXPLAIN.md`. For a version of this with no code in it at all, see [`../cheat_sheet.md`](../cheat_sheet.md).
+This file explains how the application's files interact at a navigation and data-flow level. For function-by-function detail, see `CODE_EXPLAIN.md`. For a version of this with no code in it at all, see [`CHEAT_SHEET.md`](CHEAT_SHEET.md).
 
 ## Recent changes
 
@@ -14,7 +14,7 @@ Earlier, in `e96074a`:
 - **The child-process output loop is shared and runs once.** `status.watch_process()` replaces a hand-written loop in each `prog_dev.py`; TR's ran twice over the same pipe and the second pass did nothing — see §4.
 - **End-of-run bookkeeping is one module**, `resources/utilities/reporting.py` — see §6.
 - **Spreadsheets are read by column name.** `excel_utils` resolves every column through the header row — see §5.
-- **`device_types/` was deleted** (all four files were entirely commented out), so the three pages that did `from device_types import *` no longer do — see §2.
+- **`device_types/` was deleted** (four files of working code that nothing ever instantiated), so the three pages that did `from device_types import *` no longer do — see §2.
 
 ## 1. Application startup
 
@@ -207,4 +207,4 @@ Two consequences worth keeping in mind when touching this flow:
 
 One knock-on effect: frozen, `sys.executable` is the app rather than a Python interpreter, so `prog_dev.py` cannot spawn a hardware script directly. `script_command()` returns `[main.exe, --run-script, <script>, ...]` in that case, and `main.py`'s startup handles the flag (§1). From source it returns the ordinary `[python.exe, <script>, ...]`.
 
-See `../SETUP.md` §6 for the build command and the required post-build staging of `devices/`.
+See `SETUP.md` §6 for the build command and the required post-build staging of `devices/`.

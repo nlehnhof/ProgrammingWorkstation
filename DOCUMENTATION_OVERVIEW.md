@@ -2,21 +2,16 @@
 
 **Branch:** `docs-and-simplify` · **Last commit:** `e96074a` (2026-08-04) — "Simplify onto a shared utility layer; delete dead abstractions"
 
-This file used to be a second, parallel description of the whole application. It had drifted badly out of date — it described `device_types/` as the extension mechanism (that package no longer exists), listed only one supported device, and documented `excel_utils` functions that had not been written yet.
-
-Rather than maintain two overlapping whole-app documents, this one is now a **signpost**. Everything below points at the document that actually owns each subject.
-
 ## Start here
 
 | If you want to… | Read |
 | --- | --- |
-| Understand what this is, in plain language | [`cheat_sheet.md`](cheat_sheet.md) |
-| Set up a machine that has never run this | [`SETUP.md`](SETUP.md) |
+| Understand what this is, in plain language | [`documentation/CHEAT_SHEET.md`](documentation/CHEAT_SHEET.md) |
+| Set up a machine that has never run this | [`documentation/SETUP.md`](documentation/SETUP.md) |
 | Use the app day to day | [`documentation/INSTRUCTIONS.md`](documentation/INSTRUCTIONS.md) |
 | Understand how the files fit together | [`documentation/WORKFLOW.md`](documentation/WORKFLOW.md) |
 | Understand what a specific file or function does | [`documentation/CODE_EXPLAIN.md`](documentation/CODE_EXPLAIN.md) |
 | Work on the Teltonika device specifically | [`devices/TR/documentation/`](devices/TR/documentation/) |
-| Write documentation in this repo | [`resources/documentation/DOCS.md`](resources/documentation/DOCS.md) |
 
 ## The one-paragraph version
 

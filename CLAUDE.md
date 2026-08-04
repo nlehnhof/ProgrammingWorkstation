@@ -9,11 +9,12 @@ A PyQt5 desktop app ("Programming Workstation") that automates provisioning of e
 Credentials are stored as plaintext in `core/devices.json` and each `devices/*/device_config.json`. This is a known, documented limitation — treat hardcoded-looking IPs/passwords as intentional lab defaults, not bugs, unless told otherwise.
 
 Documentation, in order of usefulness:
-- `cheat_sheet.md` — one page, plain language, no code. Start here for orientation.
-- `documentation/` — the maintained set: `README.md`, `WORKFLOW.md`, `CODE_EXPLAIN.md`, `INSTRUCTIONS.md`. Kept in sync with each commit; this is the source of truth.
-- `devices/TR/documentation/` — the same set, scoped to the Teltonika device.
+- `documentation/CHEAT_SHEET.md` — one page, plain language, no code. Start here for orientation.
+- `documentation/` — the maintained set: `README.md`, `WORKFLOW.md`, `CODE_EXPLAIN.md`, `INSTRUCTIONS.md`, `SETUP.md`, `CHEAT_SHEET.md`. Kept in sync with each commit; this is the source of truth.
+- `devices/TR/documentation/` — `README.md`, `WORKFLOW.md`, `CODE_EXPLAIN.md`, `INSTRUCTIONS.md`, scoped to the Teltonika device.
 - `DOCUMENTATION_OVERVIEW.md` — a signpost to the above; it used to be a second parallel description and is no longer.
-- `resources/documentation/DOCS.md` — this repo's conventions for *writing* documentation. Follow it if asked to add or update docs anywhere in the tree.
+
+There is no documentation style guide in this repo — match the style of the surrounding docs.
 
 ## Running the app and tests
 
@@ -40,7 +41,7 @@ connection_page (3)                          [wiring photo; not currently wired 
 error_log_page                               [triggered on exception, any point]
 ```
 
-- **A device is a folder, not a class.** `devices/{NAME}/` holds that device's `prog_dev.py`, hardware script, `device_config.json`, `checklist.json`, `instructions.txt` and spreadsheets. There is no base class to subclass — `device_types/` used to exist for that and was deleted in `e96074a` (all four files were 100% commented out).
+- **A device is a folder, not a class.** `devices/{NAME}/` holds that device's `prog_dev.py`, hardware script, `device_config.json`, `checklist.json`, `instructions.txt` and spreadsheets. There is no base class to subclass — `device_types/` used to exist for that and was deleted in `e96074a`. Its four files were live code (`base_device.py`, `ssh_device.py`, `telnet_device.py`, `__init__.py`), but nothing ever instantiated the classes: `core/manager.py` and `pages/add_device_page.py` imported `Device`/`SSHDevice` without using them, and three pages did `from device_types import *` for no symbols they referenced.
 - **`core/manager.py`** — single `DeviceManager` instance (module-level `manager = DeviceManager()`), owns `core/devices.json`. `create_device()` validates, copies a source folder into `devices/{name}/`, and **raises** on bad input so the page can show a dialog. `manager.names()` re-reads from disk, so pages see devices added during the session.
 - **How a device gets programmed**: `pages/program_page.py` builds a namespace and does a literal `exec(code, namespace)` on `devices/{device}/prog_dev.py` — it is not imported as a normal module, and has no reliable `__file__`. `tests/test_prog_dev_integration.py` mirrors this with `importlib.util.spec_from_file_location`. Static import graphs won't show the edge from `program_page.py`.
 - **The run happens on a `QThread`** (`ProgramWorker`), and the hardware script runs as a **subprocess** of that. Milestones travel back over the child's stdout.
@@ -77,7 +78,7 @@ The remaining behavioural difference: **`digix20.py` can resume**, detecting whe
 
 ## Working in this repo
 
-- When adding a new device type, add a `devices/{NAME}/` folder with its own `prog_dev.py`, `device_config.json`, `instructions.txt` and config templates. `devices/digiIX20/prog_dev.py` is 104 lines and is the reference to copy.
+- When adding a new device type, add a `devices/{NAME}/` folder with its own `prog_dev.py`, `device_config.json`, `instructions.txt` and config templates. `devices/digiIX20/prog_dev.py` is 104 lines and is the reference to copy. **The contract is name-based and unchecked** — the file must be `prog_dev.py`, the entry point must be `run_main_script(airport, gate, temp_pass, device)`, and a device with no non-blank `instructions.txt` can never be programmed because the Program button never enables. `documentation/INSTRUCTIONS.md` § "Adding a new device type" has the full rules and the exec() traps (no `__file__`, `progress_callback` injected into globals, `sys.exit()` read as success).
 - Respect the config precedence order in `device_config.py`: add new tunables to the device's `device_config.json` first, and only reach for an env var override if the value genuinely needs to differ per deployment machine.
 - `devices/TR/history/` holds abandoned prior implementations (`dashboard.py`, `prog_dev_old.py`, `tel2.py`) — reference only, not live code.
 - Runtime output (`logs/`, `crash_logs/`, `router_labels/`, `__pycache__/`) is gitignored. Don't commit it.

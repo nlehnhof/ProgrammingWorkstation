@@ -5,7 +5,7 @@ This application consolidates the programming of the various field devices we sh
 - add a device (with its configs, firmware, programs and data), and
 - program and test that device.
 
-For a plain-language explanation of *what the app does and why*, see [`../cheat_sheet.md`](../cheat_sheet.md).
+For a plain-language explanation of *what the app does and why*, see [`../documentation/CHEAT_SHEET.md`](../documentation/CHEAT_SHEET.md).
 For the detailed technical documentation set, see [`../documentation/`](../documentation/).
 
 ## Directory map
@@ -36,7 +36,7 @@ For the detailed technical documentation set, see [`../documentation/`](../docum
             One shared registry for the whole application.
     > main.spec
         The PyInstaller build recipe. Run `pyinstaller core/main.spec` from
-        the repo root. See ../SETUP.md §6.
+        the repo root. See ../documentation/SETUP.md §6.
     > requirements.txt
         Packages and versions required to run the application.
 

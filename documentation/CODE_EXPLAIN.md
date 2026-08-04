@@ -4,7 +4,7 @@
 
 Function-level explanation of every source file in the app, grouped by directory. The Teltonika device implementation (`devices/TR/`) has its own nested `documentation/CODE_EXPLAIN.md`; the Digi IX20 implementation (`devices/digiIX20/`) is covered at the end of this file.
 
-Complexity ratings default to **simple** per `resources/documentation/DOCS.md`; only genuinely intricate files are rated higher.
+Complexity ratings default to **simple**; only genuinely intricate files are rated higher.
 
 ## New and changed in `e96074a`
 
@@ -14,7 +14,7 @@ Complexity ratings default to **simple** per `resources/documentation/DOCS.md`; 
 - **`status.py`** — the `##STATUS##` protocol between a hardware script and the GUI checklist, *and* `watch_process()`, the loop that runs a child script and consumes its output. Both halves in one module so the marker format is defined once.
 - **`reporting.py`** — crash log, spreadsheet stamping, label writing. This bookkeeping appeared four times in `devices/TR/prog_dev.py` alone, each copy re-scanning the sheet and hardcoding column numbers.
 
-**Deleted:** `device_types/` in its entirety. All four files (`base_device.py`, `ssh_device.py`, `telnet_device.py`, `__init__.py`) were 100% commented out, and the three pages importing the package did so with `import *` for no symbols at all.
+**Deleted:** `device_types/` in its entirety. All four files (`base_device.py`, `ssh_device.py`, `telnet_device.py`, `__init__.py`) held working code — a `Device` ABC with `SSHDevice`/`TelnetDevice` implementations, and an `__init__.py` that walked the folder with `importlib`/`ast` to re-export whatever it found — but nothing ever instantiated any of it. `core/manager.py` imported `Device` and `pages/add_device_page.py` imported `SSHDevice` without using either; `home_page`, `connection_page` and `add_device_page` did `from device_types import *` for no symbols they referenced. The `__init__.py` scan also printed `All Classes: {...}` to stdout on every app start.
 
 **Rewritten:** `devices/TR/prog_dev.py` (943 → 364 lines) and `devices/digiIX20/prog_dev.py` (353 → 104). `core/manager.py` lost twelve unused imports and its `devices`/`device_credentials` split.
 
@@ -164,7 +164,7 @@ Operator instructions live as numbered steps with reference photos in `devices/d
 
 ## `tests/`
 
-Nine files, 83 tests, run with `python -m pytest tests/` from the repo root (`pytest` is not in `requirements.txt` — see `../SETUP.md` §4). All pass.
+Nine files, 83 tests, run with `python -m pytest tests/` from the repo root (`pytest` is not in `requirements.txt` — see `SETUP.md` §4). All pass.
 
 `test_templating.py` covers the staging helper, including the two failure modes that motivated it. `test_tr_config_manifest.py` guards the exact set of 82 config files TR pushes — it fails if the manifest ever grows to include the 12 files of per-unit device state in `og_configs/`, or if a new file appears there without a decision about whether it should ship.
 

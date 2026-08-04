@@ -4,7 +4,7 @@
 
 *Doc style note: formal structure with easy-to-read explanations, Mermaid diagrams for workflow, and `file:line` citations (no inline code excerpts). Set by user preference when this folder was created.*
 
-> **In a hurry, or not a programmer?** Read [`../cheat_sheet.md`](../cheat_sheet.md) instead — one page, plain language, no code.
+> **In a hurry, or not a programmer?** Read [`CHEAT_SHEET.md`](CHEAT_SHEET.md) instead — one page, plain language, no code.
 
 ## Overview
 
@@ -18,7 +18,7 @@ Three things are worth knowing before reading further:
 
 1. **Spreadsheets are read by column *name*, never by position.** `resources/utilities/excel_utils.py` resolves every column through the header row. The old positional reads (`row[idx - 3]`, `column=7`) silently returned the wrong cell whenever a sheet's columns differed.
 2. **The end-of-run bookkeeping is one module.** Crash log, spreadsheet stamp and label file all live in `resources/utilities/reporting.py`. Each device's `prog_dev.py` previously wrote that out longhand, four times over.
-3. **`device_types/` no longer exists.** All four files in it were 100% commented out. Devices are folders, not classes — that has always been the real extension mechanism.
+3. **`device_types/` no longer exists.** Its four files were working code that nothing ever used — the classes were imported in three places and never instantiated. Devices are folders, not classes — that has always been the real extension mechanism.
 
 The measurable effect: `devices/TR/prog_dev.py` went from 943 to 364 lines, `devices/digiIX20/prog_dev.py` from 353 to 104, and the test suite from 44 passing / 6 failing / 2 uncollectable modules to **83 passing**.
 
@@ -26,8 +26,8 @@ The measurable effect: `devices/TR/prog_dev.py` went from 943 to 364 lines, `dev
 
 ## Where to start
 
-- **Not a developer, or just want the gist?** → [`../cheat_sheet.md`](../cheat_sheet.md)
-- **New machine, nothing installed yet?** → [`../SETUP.md`](../SETUP.md) — prerequisites, virtual environment, administrator rights, building the .exe, and a verification checklist.
+- **Not a developer, or just want the gist?** → [`CHEAT_SHEET.md`](CHEAT_SHEET.md)
+- **New machine, nothing installed yet?** → [`SETUP.md`](SETUP.md) — prerequisites, virtual environment, administrator rights, building the .exe, and a verification checklist.
 - **Repo already runs, want to use it?** → `INSTRUCTIONS.md`
 - **Want to understand how it fits together?** → `WORKFLOW.md`, then `CODE_EXPLAIN.md`
 
@@ -51,7 +51,7 @@ Questions answered:
 4. What triggers the global error dialog, and where do crash logs get written?
 5. How does a milestone travel from a hardware script to a row in the Status panel?
 
-**INSTRUCTIONS.md** : Day-to-day usage for a developer or operator already set up — a first-run walkthrough, warnings, how to add a device type, and an FAQ. For first-time setup on a new machine, see `../SETUP.md` instead.
+**INSTRUCTIONS.md** : Day-to-day usage for a developer or operator already set up — a first-run walkthrough, warnings, how to add a device type, and an FAQ. For first-time setup on a new machine, see `SETUP.md` instead.
 Keywords: running the app, pytest, Status panel, `checklist.json`, adding a device type, administrator rights.
 Questions answered:
 1. How do I run the app and the test suite?
@@ -62,7 +62,6 @@ Questions answered:
 
 ## Related documentation
 
-- `../cheat_sheet.md` — one-page, plain-language summary of what the app is and how it is built. Written for someone who is not going to read any code.
-- `../SETUP.md` — first-time setup on a device that has never run this before: prerequisites, environment creation, UAC/administrator behaviour, building and staging the packaged .exe.
+- `CHEAT_SHEET.md` — one-page, plain-language summary of what the app is and how it is built. Written for someone who is not going to read any code.
+- `SETUP.md` — first-time setup on a device that has never run this before: prerequisites, environment creation, UAC/administrator behaviour, building and staging the packaged .exe.
 - `../devices/TR/documentation/` — nested documentation folder for the Teltonika RUTX08 device implementation specifically.
-- `../resources/documentation/DOCS.md` — the documentation style guide this folder's rules are based on.

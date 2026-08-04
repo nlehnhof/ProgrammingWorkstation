@@ -55,7 +55,7 @@ Think of it as four layers, each only talking to the one below it.
 
 > **A "device" is a folder, not a piece of code.**
 
-To teach the workstation a new kind of router, you don't write a new program — you drop in a **folder** containing that router's software and settings, and register it. That's it. No rebuilding, no programming. It works even on the installed, packaged version.
+To teach the workstation a new kind of router, you don't write a new program — you drop in a **folder** containing that router's software and settings, and register it. The folder needs to follow the rules that allows the application to find and run the programming and testing for that device. It works even on the installed, packaged version.
 
 ---
 
@@ -133,7 +133,7 @@ The cleanup also fixed three real faults that had been hiding in the Teltonika c
 2. **A router that failed to set up was then tested anyway**, producing a second, more confusing failure on top of the first.
 3. **Each test leaked a connection** to the test computer, until it eventually refused to accept any more.
 
-And it deleted a folder called `device_types/` — four files that had been entirely commented out, doing nothing, while three screens still imported them.
+And it deleted a folder called `device_types/` — four files of real, working code that nothing ever actually used, while three screens still imported them out of habit.
 
 ---
 
