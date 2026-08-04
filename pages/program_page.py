@@ -1,20 +1,58 @@
 # program_page.py
-from PyQt5.QtWidgets import QMainWindow, QCheckBox, QScrollArea, QListWidget, QSizePolicy, QApplication, QWidget, QLabel, QLineEdit, QPushButton, QTextEdit, QVBoxLayout, QHBoxLayout, QMessageBox, QComboBox
-from device_types.ssh_device import SSHDevice
-from PyQt5.QtGui import QShowEvent
-from device_types import *
-from core.manager import manager
-import sys
-from pathlib import Path
-from devices import *
 import os
-from resources.utilities.excel_utils import get_dropdown, lookup_excel, get_excel_files
-from PyQt5.QtCore import Qt
-import importlib.util
-import json
+import sys
+import traceback
+
+from PyQt5.QtWidgets import QMainWindow, QCheckBox, QScrollArea, QListWidget, QSizePolicy, QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout, QHBoxLayout, QMessageBox, QComboBox
+from PyQt5.QtCore import Qt, QThread, pyqtSignal
+
+from core.manager import manager
+from pages.status_panel import StatusPanel, load_checklist
+from resources.utilities.app_paths import device_dir
+from resources.utilities.excel_utils import get_dropdown, get_excel_files
 from resources.utilities.fonts import header_font, subtitle_font
 
-current_dir = Path(__file__).parent
+
+class ProgramWorker(QThread):
+    """Runs a device's prog_dev.py off the GUI thread.
+
+    The programming run takes several minutes; doing it inline froze the window
+    for the whole time, which made a live checklist impossible. Progress from
+    the device script arrives on `progress` and is applied on the GUI thread.
+    """
+
+    progress = pyqtSignal(str, str, str)
+    finished_ok = pyqtSignal()
+    failed = pyqtSignal(str)
+
+    def __init__(self, program_file, airport, gate, temp_pass, device, parent=None):
+        super().__init__(parent)
+        self.program_file = program_file
+        self.airport = airport
+        self.gate = gate
+        self.temp_pass = temp_pass
+        self.device = device
+
+    def _emit_progress(self, step_id, state, detail=""):
+        self.progress.emit(str(step_id), str(state), str(detail))
+
+    def run(self):
+        try:
+            with open(self.program_file, "r") as file:
+                code = file.read()
+
+            namespace = {"progress_callback": self._emit_progress}
+            exec(code, namespace)
+            namespace["run_main_script"](self.airport, self.gate, self.temp_pass, self.device)
+        except SystemExit:
+            # A device script calling sys.exit() must not take the app down.
+            self.finished_ok.emit()
+            return
+        except BaseException:
+            self.failed.emit(traceback.format_exc())
+            return
+        self.finished_ok.emit()
+
 
 class ProgramPage(QMainWindow):
     def __init__(self, stacked_widget):
@@ -22,14 +60,14 @@ class ProgramPage(QMainWindow):
         self.stacked_widget = stacked_widget
         self.devices_list = QListWidget()
         self.temp_pass = None
+        self.worker = None
         self._init_ui()
 
     def _init_ui(self):
         self.setWindowTitle("Program Device Page")
         central_widget = QWidget()
-        central_widget.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        central_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.setCentralWidget(central_widget)
-        print("Registred Devices: ", registered_devices)
 
         # Layouts
         outer_layout = QVBoxLayout(central_widget)
@@ -59,7 +97,7 @@ class ProgramPage(QMainWindow):
 
         # Drop Downs
         self.device_chosen = QComboBox()
-        self.device_chosen.addItems(registered_devices)
+        self.device_chosen.addItems(manager.names())
         self.device_chosen.setFixedWidth(150)
         self.airport = QComboBox()
         self.airport.addItem("No data")
@@ -124,35 +162,63 @@ class ProgramPage(QMainWindow):
 
         form_widget = QWidget()
         form_widget.setLayout(first)
+        # Capped so the word-wrapped labels below can't squeeze the Status
+        # column past its minimum and clip the PASS/FAIL text.
+        form_widget.setMaximumWidth(560)
 
-        outer_layout.addWidget(form_widget)
+        # Left: the existing form. Right: the live Status checklist.
+        columns = QHBoxLayout()
+        columns.setSpacing(15)
+        columns.addWidget(form_widget, 3)
+
+        self.status_panel = StatusPanel()
+        self.status_panel.setMinimumWidth(300)
+        columns.addWidget(self.status_panel, 2)
+
+        outer_layout.addLayout(columns)
         self.load_instructions(self.device_chosen.currentText())
+        self.load_checklist(self.device_chosen.currentText())
         self.refresh()
 
     def program_device(self):
         device = self.device_chosen.currentText().strip()
-        program_file = os.path.join(current_dir, f"../devices/{device}/prog_dev.py")
-        func_name = "run_main_script"
-        with open(program_file, "r") as file:
-            code = file.read()
+        airport = self.airport.currentText().strip()
+        gate = self.gate.currentText().strip()
 
-        if code is None:
-            print("Nothing found")
+        if not device or not airport or not gate or not self.temp_pass:
+            QMessageBox.critical(
+                self,
+                "Missing Information",
+                "Please fill out Device, Airport, Gate, and Password before proceeding."
+            )
+            return  # Stop execution
 
-        if not device or not self.airport or not self.gate or not self.temp_pass:
-                QMessageBox.critical(
-                    self,
-                    "Missing Information",
-                    "Please fill out Device, Airport, Gate, and Password before proceeding."
-                )
-                return  # Stop execution
-            
-        namespace = {}
-        exec(code, namespace)
-        namespace[func_name](self.airport.currentText().strip(), self.gate.currentText().strip(), self.temp_pass, device)
+        program_file = os.path.join(device_dir(device), "prog_dev.py")
+        if not os.path.isfile(program_file):
+            QMessageBox.critical(
+                self,
+                "Device Script Missing",
+                f"No prog_dev.py found for '{device}'."
+            )
+            return
+
+        self.status_panel.reset()
+        self.program_button.setEnabled(False)
+
+        self.worker = ProgramWorker(program_file, airport, gate, self.temp_pass, device, self)
+        self.worker.progress.connect(self.on_progress)
+        self.worker.finished_ok.connect(self.on_program_finished)
+        self.worker.failed.connect(self.on_program_failed)
+        self.worker.start()
+
+    def on_progress(self, step_id, state, detail):
+        self.status_panel.update_step(step_id, state, detail)
+
+    def on_program_finished(self):
+        self.program_button.setEnabled(True)
         while self.instructions_layout.count():
             item = self.instructions_layout.takeAt(0)
-            widget = item.widget() # type:ignore
+            widget = item.widget() if item is not None else None
             if widget is not None:
                 widget.setParent(None)
                 widget.deleteLater()
@@ -160,7 +226,21 @@ class ProgramPage(QMainWindow):
         complete.setFont(header_font)
         complete.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.instructions_layout.addWidget(complete)
-        
+
+    def on_program_failed(self, tb_text):
+        self.status_panel.fail_running("see the error log")
+        self.program_button.setEnabled(True)
+        # Written from the GUI thread on purpose: error_log_page's stdout/stderr
+        # interceptor opens a modal QDialog on any stderr write, which is only
+        # safe on the Qt thread. This is what puts Digi failures in the error
+        # log the same way TR's failures land there.
+        sys.stderr.write(tb_text)
+
+    def load_checklist(self, device):
+        """Show the automated milestone list for the selected device."""
+        steps, image_path = load_checklist(device_dir(device))
+        self.status_panel.set_steps(steps, image_path)
+
     def update_airports(self):
         """Update airport dropdown based on device chosen."""
         self.airport.clear()
@@ -170,10 +250,11 @@ class ProgramPage(QMainWindow):
         if device_info is None:
             print("Device Info not found")
             return
-        path = os.path.join(current_dir, f"../devices/{device}")
+        path = device_dir(device)
         airport_options = get_excel_files(path)
         self.airport.addItems(airport_options)
         self.load_instructions(device)
+        self.load_checklist(device)
 
     def load_instructions(self, device):
         while self.instructions_layout.count():
@@ -185,7 +266,7 @@ class ProgramPage(QMainWindow):
 
         self.instruction_checkboxes = []
 
-        file_path = os.path.join(f'C:\\Users\\u324754\\programming_workstation\\devices\\{device}', 'instructions.txt')
+        file_path = os.path.join(device_dir(device), "instructions.txt")
         try:
             with open(file_path, "r") as f:
                 for line in f:
@@ -218,11 +299,11 @@ class ProgramPage(QMainWindow):
         device_info = manager.get_credentials(device)
         if device_info is None:
             return
-        path = os.path.join(current_dir, f"../devices/{device}")
+        path = device_dir(device)
         if device_info is None:
             print("device info not found")
             return
-        
+
         file = os.path.join(path, airport)
         gate_options = get_dropdown(file)
         print(gate_options)
@@ -230,33 +311,23 @@ class ProgramPage(QMainWindow):
             self.gate.addItems(gate_options)
 
     def showEvent(self, a0):
-            """Refresh list every time the page is shown."""
-            self.devices_list.clear()  # Clear the widget
-            self.devices_list.addItems(registered_devices)  # Load from global list
-            self.refresh()
-            super().showEvent(a0)
+        """Re-read the registry every time the page is shown."""
+        self.refresh()
+        super().showEvent(a0)
 
     def refresh(self):
-        """Load devices from JSON and update both widgets."""
-        try:
-            with open("core/devices.json", "r", encoding="utf-8") as f:
-                data = json.load(f)
+        """Re-read the device registry and update the widgets that list it."""
+        names = manager.names()
 
-            # Get all top-level keys from JSON
-            keys = list(data.keys())
+        self.devices_list.clear()
+        self.devices_list.addItems(names)
 
-            # Update QListWidget
-            self.devices_list.clear()
-            self.devices_list.addItems(keys)
+        self.device_chosen.clear()
+        self.device_chosen.addItems(names)
 
-            # Update QComboBox
-            self.device_chosen.clear()
-            self.device_chosen.addItems(keys)
-
-        except FileNotFoundError:
-            print("Error: devices.json not found.")
-        except json.JSONDecodeError:
-            print("Error: devices.json is not valid JSON.")
+        # Keep the checklist matched to whatever device is now selected.
+        if hasattr(self, "status_panel"):
+            self.load_checklist(self.device_chosen.currentText().strip())
 
     def on_submit(self):
         user_text=self.router.text().strip()

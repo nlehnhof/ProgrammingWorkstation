@@ -1,0 +1,14 @@
+{
+    "device_image": null,
+    "steps": [
+        {"id": "scan",        "label": "Scanning for Router", "estimate": "~20 sec"},
+        {"id": "check_ip",    "label": "Checking IP",         "estimate": "~15 sec"},
+        {"id": "firmware_1",  "label": "Firmware #1 install", "estimate": "~4 min"},
+        {"id": "reboot_1",    "label": "First reboot",        "estimate": "~2 min"},
+        {"id": "config_push", "label": "Configuration push",  "estimate": "~4 min"},
+        {"id": "static_ip",   "label": "Switching static IP", "estimate": "~2 min"},
+        {"id": "change_ip",   "label": "Changing IP address", "estimate": "~1 min"},
+        {"id": "testing",     "label": "Testing",             "estimate": "~1 min"},
+        {"id": "label",       "label": "Making Label",        "estimate": "~5 sec"}
+    ]
+}

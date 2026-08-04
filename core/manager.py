@@ -1,140 +1,115 @@
-from device_types.base_device import Device
-import os
-import shutil
-from device_types import *
-import sys
-import inspect
-from resources.utilities.network_utils import is_valid_ip
+"""The registry of device types the app knows how to program.
 
-import subprocess
-import paramiko
-import socket
-import select
-import argparse
-from collections import deque
-from datetime import datetime
-import time
+A "device" here is a *folder*, not a class. Registering one copies a source
+folder into `devices/{Name}/` and records its details in `core/devices.json`;
+from then on the Program page lists it and runs the `prog_dev.py` it contains.
+That is the whole extension mechanism -- there is no base class to subclass and
+no code change needed to add a device.
+
+Known limitation, deliberate and documented rather than accidental: whatever
+extra keys an operator enters (passwords included) are stored as plain text in
+`devices.json`.
+"""
 
 import json
-from typing import Dict, Any
+import os
+import shutil
+
+from resources.utilities.app_paths import app_root, device_dir
+
+# Beside this file, so it is found whether the app runs from source or as the
+# packaged exe -- and so it sits next to the devices/ tree it describes.
+DEVICES_JSON = os.path.join(app_root(), "core", "devices.json")
+
+REQUIRED_KEYS = ("Name", "Path")
 
 
 class DeviceManager:
-    def __init__(self, json_path: str = "devices.json"):
-        # Dictionary to store device objects
+    def __init__(self, json_path=DEVICES_JSON):
         self.json_path = json_path
-        self.devices = {}
-        self._load_devices()
-        
-    def create_device(self, data: Dict):
+        self.devices = self._load()
+
+    # -- registry -----------------------------------------------------------
+
+    def _load(self):
+        """Read the registry, treating an unreadable file as an empty one.
+
+        A corrupt devices.json must not stop the app from starting: the
+        operator can still re-register a device, which rewrites the file.
         """
-        Create a device entry, copy its files, and store credentials.
-
-        :param name: Unique device name
-        :param device_obj: Device object instance
-        :param folder_path: Path to source folder
-        :param ip_address: Device IP address
-        :param username: Login username
-        :param password: Login password (stored in memory)
-        :param etc: etc
-        """
-        try: 
-            name = data["Name"]
-            dpath = data["Path"]
-            # dtype = data["type"]
-        except:
-            return print("To Add a Device, the Device must have a name and a path.")
-
-        # Directory containing device modules
-        current_dir = os.path.dirname(__file__)
-        print(current_dir, flush=True)
-        path = os.path.join(current_dir, dpath)
-        print(path, flush=True)
-        time.sleep(2)
-
-        # Validate inputs
-        if not isinstance(name, str) or not name.strip():
-            raise ValueError("Device name must be a non-empty string.")
-        if name in self.devices:
-            raise KeyError(f"Device '{name}' already exists.")
-        if not os.path.isdir(path):
-            raise FileNotFoundError(f"Source folder '{path}' does not exist.")
-
-        # Save credentials in memory (⚠ not persistent — for security)
-        name = data["Name"]
-        # Create a nested dictionary for this device
-        self.device_credentials[name] = {
-            key: value
-            for key, value in data.items()
-            if key != "Name"
-        }
-        self._save_devices()
-
-        destination = os.path.join(current_dir, "devices", name)
-        # Create destination directory
-        dest = shutil.copytree(path, destination, dirs_exist_ok=True)
-
-    def get_credentials(self, name: str):
-        """Retrieve stored credentials for a device from a JSON file."""
         if not os.path.exists(self.json_path):
-            return "Error: json path"
+            return {}
+        try:
+            with open(self.json_path, "r", encoding="utf-8") as handle:
+                data = json.load(handle)
+        except (OSError, json.JSONDecodeError) as exc:
+            print(f"Could not read {self.json_path}: {exc}", flush=True)
+            return {}
+
+        if not isinstance(data, dict):
+            print(f"{self.json_path} is not a JSON object; ignoring it.", flush=True)
+            return {}
+        return data
+
+    def _save(self):
+        """Write the registry back, merging over whatever is on disk.
+
+        Merging rather than overwriting matters when two copies of the app are
+        open: the one that saves second would otherwise drop the other's device.
+        """
+        on_disk = self._load()
+        on_disk.update(self.devices)
+        self.devices = on_disk
 
         try:
-            with open(self.json_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
+            os.makedirs(os.path.dirname(self.json_path), exist_ok=True)
+            with open(self.json_path, "w", encoding="utf-8") as handle:
+                json.dump(on_disk, handle, indent=4)
+        except OSError as exc:
+            print(f"Could not write {self.json_path}: {exc}", flush=True)
 
-            # Ensure the JSON is a dictionary
-            if not isinstance(data, dict):
-                raise ValueError("Invalid credentials file format.")
+    # -- public API ---------------------------------------------------------
 
-            return data.get(name, None)
+    def names(self):
+        """Registered device names, refreshed from disk."""
+        self.devices = self._load()
+        return sorted(self.devices)
 
-        except (json.JSONDecodeError, ValueError) as e:
-            print(f"Error reading credentials file: {e}")
-            return None
-        except Exception as e:
-            print(f"Unexpected error: {e}")
-            return None
-    
-    def _load_devices(self):
-        """Load devices from Json file if it exists"""
-        if os.path.exists(self.json_path):
-            try:
-                with open(self.json_path, "r", encoding="utf-8") as f:
-                    self.device_credentials = json.load(f)
-                if not isinstance(self.device_credentials, dict):
-                    raise ValueError("Invalid JSON structure: Expected a Dict")
-            except (json.JSONDecodeError, ValueError) as e:
-                print(f"Error reading {self.json_path}: {e}")
-                self.device_credentials = {}
-        else:
-            self.device_credentials = {}
+    def get_credentials(self, name):
+        """Everything recorded for one device, or None if it isn't registered."""
+        return self._load().get(name)
 
-    def _save_devices(self):
-        """Append new device credentials to JSON file without overwriting existing ones."""
-        try:
-            # Load existing credentials if file exists
-            if os.path.exists(self.json_path):
-                try:
-                    with open(self.json_path, "r", encoding="utf-8") as f:
-                        existing_data = json.load(f)
-                    if not isinstance(existing_data, dict):
-                        print(f"Warning: {self.json_path} contains invalid format. Resetting.")
-                        existing_data = {}
-                except (json.JSONDecodeError, OSError) as e:
-                    print(f"Error reading {self.json_path}: {e}")
-                    existing_data = {}
-            else:
-                existing_data = {}
+    def create_device(self, data):
+        """Register a device and copy its folder into `devices/{Name}/`.
 
-            # Merge new credentials (overwrites keys if they already exist)
-            existing_data.update(self.device_credentials)
+        `data` needs at least "Name" and "Path"; any other keys are stored
+        alongside them. Raises ValueError / FileNotFoundError / KeyError with a
+        message meant for the operator, rather than reporting failure by
+        printing and returning.
+        """
+        missing = [key for key in REQUIRED_KEYS if not str(data.get(key, "")).strip()]
+        if missing:
+            raise ValueError(
+                f"A device needs both 'Name' and 'Path'. Missing: {', '.join(missing)}."
+            )
 
-            # Save merged data
-            with open(self.json_path, "w", encoding="utf-8") as f:
-                json.dump(existing_data, f, indent=4)
+        name = str(data["Name"]).strip()
+        source = str(data["Path"]).strip()
 
-        except OSError as e:
-            print(f"Error writing to {self.json_path}: {e}")             
+        if name in self._load():
+            raise KeyError(f"A device called '{name}' is already registered.")
+        if not os.path.isdir(source):
+            raise FileNotFoundError(f"Source folder does not exist: {source}")
 
+        destination = device_dir(name)
+        shutil.copytree(source, destination, dirs_exist_ok=True)
+        print(f"Copied {source} -> {destination}", flush=True)
+
+        self.devices[name] = {key: value for key, value in data.items() if key != "Name"}
+        self.devices[name]["Name"] = name
+        self._save()
+        return destination
+
+
+# One shared instance: the pages all read the same registry.
 manager = DeviceManager()

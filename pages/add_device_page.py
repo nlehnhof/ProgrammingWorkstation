@@ -1,16 +1,9 @@
-from abc import ABC, abstractmethod
-from typing import Any
+# add_device_page.py
+from PyQt5.QtWidgets import QMainWindow, QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout, QHBoxLayout, QMessageBox
+from PyQt5.QtGui import QIcon, QFont
+from PyQt5.QtCore import Qt
 
-from PyQt5.QtWidgets import QMainWindow, QSizePolicy, QFrame, QStyleFactory, QSpacerItem, QSizePolicy, QApplication, QWidget, QLabel, QLineEdit, QPushButton, QTextEdit, QVBoxLayout, QHBoxLayout, QMessageBox, QComboBox
-from PyQt5.QtCore import pyqtSlot
-from device_types.ssh_device import SSHDevice
-from device_types import *
 from core.manager import manager
-import sys
-from devices import *
-from PyQt5.QtGui import QIcon, QBrush, QColor, QStandardItemModel, QFont
-from PyQt5.QtCore import QSize, Qt
-import json
 
 class AddDevice(QMainWindow):
     """
@@ -58,17 +51,6 @@ class AddDevice(QMainWindow):
         self.rows_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         top_layout.addLayout(self.rows_layout)
 
-        self.device_dropdown = QComboBox()
-        model = QStandardItemModel()
-        self.device_dropdown.setModel(model)
-        self.device_dropdown.addItem("Select Device Type...")
-        self.device_dropdown.setFixedWidth(500)
-
-        line = QFrame()
-        line.setFrameShape(QFrame.HLine)
-        line.setFrameShadow(QFrame.Sunken)
-        line.setStyleSheet("color: gray; background-color: gray; height: 3px;")
-
         names = QHBoxLayout()
         key = QLabel("Keys")
         key.setStyleSheet("color: green; font-size: 14px; font-weight: bold;")
@@ -79,12 +61,6 @@ class AddDevice(QMainWindow):
         names.setContentsMargins(0,0,0,0)
         names.setAlignment(Qt.AlignmentFlag.AlignCenter)
         names.setSpacing(350)
-
-        # Disable selecting the hint as a valid choice
-        # self.device_dropdown.addItems(all_classes)
-        # bottom_layout.addWidget(self.device_dropdown, alignment=Qt.AlignmentFlag.AlignCenter)
-        # bottom_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        # bottom_layout.addWidget(line)
 
         # Example Device
         example = QLabel("Example Device")
@@ -134,26 +110,6 @@ class AddDevice(QMainWindow):
         row2.addWidget(field_2)
         row2.addWidget(info_2)
 
-        # row_3 = QWidget()
-        # row3 = QHBoxLayout(row_3)
-        # row3.setContentsMargins(0,0,0,0)
-        # field_3 = QLineEdit("Username")
-        # field_3.setReadOnly(True)
-        # info_3 = QLineEdit("admin")
-        # info_3.setReadOnly(True)
-        # row3.addWidget(field_3)
-        # row3.addWidget(info_3)
-
-        # row_4 = QWidget()
-        # row4 = QHBoxLayout(row_4)
-        # row4.setContentsMargins(0,0,0,0)
-        # field_4 = QLineEdit("Password")
-        # field_4.setReadOnly(True)
-        # info_4 = QLineEdit("pswd123")
-        # info_4.setReadOnly(True)
-        # row4.addWidget(field_4)
-        # row4.addWidget(info_4)
-
         row_5 = QWidget()
         row5 = QHBoxLayout(row_5)
         row5.setContentsMargins(0,0,0,0)
@@ -166,8 +122,6 @@ class AddDevice(QMainWindow):
 
         rows_example.addWidget(row_w)
         rows_example.addWidget(row_2)
-        # rows_example.addWidget(row_3)
-        # rows_example.addWidget(row_4)
         rows_example.addWidget(row_5)
         bottom_layout.addLayout(rows_example)
 
@@ -231,30 +185,28 @@ class AddDevice(QMainWindow):
         for row_widget in self.rows:
             edits = row_widget.findChildren(QLineEdit)
             if len(edits) >= 2:
-                title_field, info_field = edits[0], edits[1]
-                key = title_field.text().strip()
-                value = info_field.text().strip()
+                key = edits[0].text().strip()
                 if key:
-                    data[key] = value
-        try:
-            name = data["Name"]
-            path = data["Path"]
-        except KeyError:
-            print("Device must have 'Name' and 'Path' keys/values")
-        data["type"] = self.device_dropdown.currentText().strip()
+                    data[key] = edits[1].text().strip()
+
         print("Collected Data:", data, flush=True)
 
-        # Example: pass dictionary to manager
-        manager.create_device(data)
+        # Reported in a dialog rather than only on stdout: this page is used by
+        # an operator, and a windowed build has no console to print to.
+        try:
+            manager.create_device(data)
+        except (ValueError, KeyError, OSError) as exc:
+            QMessageBox.critical(self, "Could Not Add Device", str(exc))
+            return
+
+        QMessageBox.information(
+            self, "Device Added",
+            f"'{data['Name']}' is registered and its folder has been copied into devices/.",
+        )
+        self.refresh()
 
     def refresh(self):
-        """Clear all rows and reset dropdown to default."""
-        # Remove all existing rows
+        """Clear the form back to a single empty row."""
         for row_widget in list(self.rows):
             self.remove_row(row_widget)
-
-        # Reset dropdown
-        self.device_dropdown.setCurrentIndex(0)
-
-        # Optionally add one empty row
         self.add_row()

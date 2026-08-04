@@ -1,220 +1,104 @@
-import time
-from resources.utilities.excel_utils import lookup_excel
-import subprocess
-import sys
+"""GUI-facing orchestration for the Digi IX20.
+
+This is the entry point `pages/program_page.py` calls. It does the bookkeeping
+around a run -- look the gate up in the spreadsheet, launch `digix20.py` as a
+subprocess, watch its output, then record the outcome -- while `digix20.py`
+does everything that actually touches hardware.
+
+Loaded with exec() into a fresh namespace (see program_page.py), so this module
+has no `__file__` and resolves paths from `app_root()`. The only required
+export is `run_main_script`. If the page seeded the namespace with
+`progress_callback`, milestones are forwarded to the Status checklist; without
+it everything still works.
+"""
+
 import os
-from collections import deque
-import openpyxl
-from datetime import datetime
+import time
 
-start_time = time.perf_counter()
-current = os.getcwd()
-print("current dir:", current, flush=True)
+from resources.utilities import status
+from resources.utilities.app_paths import app_root, script_command
+from resources.utilities.excel_utils import lookup_excel
+from resources.utilities.reporting import record_result, write_crash_log
 
-s_pause = 1
-l_pause = 2
 
-dropdown = None
-valid_ip = True
+class DigiProgrammingError(RuntimeError):
+    """The device did not program successfully.
+
+    Propagates out of `run_main_script` so the app's global error handler logs
+    it and shows the operator a dialog.
+    """
+
 
 def run_main_script(airport, gate, default_pass, device):
-    start_time = time.perf_counter()
+    """Program one Digi IX20 and record the result in the airport sheet."""
+    report = status.forwarder(globals().get("progress_callback"))
+    started = time.perf_counter()
 
-    file_path = os.path.abspath(f"devices/{device}/prog_dev.py")
-    print(file_path)
-    dir_path = os.path.dirname(file_path)
-    print("Directory path:", dir_path)
-    script_path = os.path.join(dir_path, "digix20.py")
-    sheet = os.path.join(dir_path, airport)
-    print("sheet", sheet, flush=True)
-    print(script_path, flush=True)
-
-    gate_ip, gate_netmask, gate_gateway = lookup_excel(sheet, gate)
-
-    crash_lines = deque(maxlen=50)
-    error = False
-    traceback = False
-
-    if valid_ip == False:
-        print("Invalid IP!")
-        return
+    device_folder = os.path.join(app_root(), "devices", device)
+    script_path = os.path.join(device_folder, "digix20.py")
+    excel = os.path.join(device_folder, airport)
+    airport_name = airport.removesuffix(".xlsx")
 
     if not os.path.isfile(script_path):
         raise FileNotFoundError(f"Script not found: {script_path}")
-    print("Running digix20.py", flush = True)
 
-    print(gate_ip, flush=True)
-    print(gate_netmask, flush=True)
+    # Read the gate's network settings first: a bad sheet must stop the run
+    # before any hardware is touched. lookup_excel raises rather than handing
+    # back blanks, so there is nothing to re-check here.
+    try:
+        gate_config = lookup_excel(excel, gate)
+    except (KeyError, ValueError) as exc:
+        print(str(exc), flush=True)
+        raise DigiProgrammingError(str(exc)) from exc
 
-    process = subprocess.Popen([sys.executable, script_path, str(gate_ip), str(gate_netmask), str(gate_gateway), str(default_pass)], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
-    for line in process.stdout: # type:ignore
-        print(line, end="")
+    gate_ip = gate_config["gate_ip"]
+    print(f"Gate {gate}: {gate_ip} / {gate_config['netmask']} via {gate_config['gateway']}",
+          flush=True)
 
-    process.wait()
-    excel = os.path.join(dir_path, airport)
-    airport = airport.removesuffix(".xlsx")
-    # print(excel, flush=True)
+    print("Running digix20.py", flush=True)
+    outcome = status.watch_process(
+        script_command(script_path, gate_ip, gate_config["netmask"],
+                       gate_config["gateway"], default_pass),
+        report,
+    )
 
-    with process.stdout: # type:ignore
-        for line in process.stdout: # type:ignore
-            statement = line.strip()
-            crash_lines.append(statement)
+    elapsed = time.perf_counter() - started
+    print(f"Elapsed: {int(elapsed // 60)} min {int(elapsed % 60)} sec", flush=True)
 
-            if "Incorrect" in line:
-                error = True
-                try:
-                    crash_log = "\n".join(crash_lines)
-                    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-                    crash_folder = "crash_logs"
-                    os.makedirs(crash_folder, exist_ok=True)
-                    # excel_name = excel.removesuffix(".xlsx") # type:ignore
-                    excel_name = airport
-                    print("Airport: ", airport, flush=True)
-                    filename_crash = f"crash_log_{device}_{excel_name}_{gate}_{timestamp}.txt"
-                    filepath = os.path.join(crash_folder, filename_crash)
+    crash_filename = None
+    if outcome["failed"]:
+        crash_filename = write_crash_log(
+            device_folder, device, airport_name, gate, outcome["log"]
+        )
 
-                    with open(filepath, "w") as file:
-                        file.write(crash_log)
-                              
-                except Exception as e:
-                    print(f"An Error Occurred: {e}")
-            
-                #create label text file
-                try:
-                    print("Creating Label")
-                    label_log = " "
-                    
-                    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-                    router_labels = "router_labels"
-                    os.makedirs(router_labels, exist_ok=True)
-                    excel_name = airport
+    # This milestone lives here rather than in digix20.py: the label and the
+    # sheet are written by this process, after the hardware script has exited.
+    if outcome["failed"]:
+        report("label", status.SKIPPED, "run failed -- no label produced")
+    else:
+        report("label", status.RUNNING)
 
-                    filename_label = f"label_{device}_{airport}_{gate}_{timestamp}.txt"
-                    filepath = os.path.join(router_labels, filename_label)
+    label_filename = record_result(
+        device_dir=device_folder,
+        excel_path=excel,
+        device=device,
+        airport=airport_name,
+        gate=gate,
+        gate_ip=gate_ip,
+        mac_addr=outcome["mac"],
+        failed=outcome["failed"],
+        crash_filename=crash_filename,
+        write_label=not outcome["failed"],
+    )
 
-                    wb = openpyxl.load_workbook(excel)
-                    
-                    to_find = gate
-                    found = False
-                            
-                    for row in sheet.iter_rows(values_only=False): # type: ignore
-                        for cell in row:
-                            if str(cell.value) == to_find:
-                                print("Collecting Label Info")
-                                t_row = cell.row
-                                t_col = cell.column
-                                bridge_serial = sheet.cell(row=t_row, column=t_col).value # type: ignore
-                                router_num = sheet.cell(row=t_row, column=6).value # type: ignore
-                                mac_addr = sheet.cell(row=t_row, column=7).value # type: ignore
-                                gate_num = sheet.cell(row=t_row, column=1).value # type: ignore
-                                
-                                print("Bridge Serial: ", bridge_serial)
-                                print("Router Num: ", router_num)
-                                print("Mac_addr: ", mac_addr)
-                                print("Gate Num: ", mac_addr)
-                                
-                                found = True
-                        if found:
-                            break
-                        
-                    if not found:
-                        print("Traceback Error Couldn't be Logged")
-                            
-                    wb.save(excel)
-                    print(filepath, flush=True)
-                    print(filepath)
-                    with open(filepath, "w") as file:
-                        print("Writing Label Info")
-                        first_line = "GATE " + str(gate_num) +" SN" + str(bridge_serial) + "," + "PN: " + str(router_num) + "," + "MA: " + str(mac_addr) + "," + "IP: " + str(gate_ip) # type:ignore
-                        file.write(first_line)
+    if outcome["failed"]:
+        message = outcome["detail"] or "Device programming failed. See the log for details."
+        print("Programming failed. Check the Status checklist and the crash log.", flush=True)
+        raise DigiProgrammingError(message)
 
-                    with open(filepath, "r") as file:
-                        print("Label File Contents")
-                        print(file.read())
-                    
-                except Exception as e:
-                    print(f"An Error Occurred 1: {e}")
+    if label_filename:
+        report("label", status.PASS, label_filename)
+    else:
+        report("label", status.FAIL, "label could not be written")
 
-        if traceback is True:
-            try:
-                crash_log = "\n".join(crash_lines)
-                    
-                timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-                crash_folder = "crash_logs"
-                os.makedirs(crash_folder, exist_ok=True)
-                excel_name = excel.removesuffix(".xlsx")
-                print("airport ", airport)
-
-                filename_crash = f"crash_log_{device}_{airport}_{gate}_{timestamp}.txt"
-                filepath = os.path.join(crash_folder, filename_crash)
-
-                with open(filepath, "w") as file:
-                    file.write(crash_log)
-                    
-            except Exception as e:
-                print(f"An Error Occurred 3: {e}")
-
-        ########################## CREATE A LABEL ##########################
-        try:
-            print("Creating Label")            
-            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-            router_labels = "router_labels"
-            os.makedirs(router_labels, exist_ok=True)
-            excel_name = excel.removesuffix(".xlsx")
-
-            filename_label = f"labe2l_{airport}_{gate}_{timestamp}.txt"
-            filepath = os.path.join(router_labels, filename_label)
-
-            wb = openpyxl.load_workbook(excel)
-            sheet = wb.active
-                    
-            to_find = gate
-            found = False
-                    
-            for row in sheet.iter_rows(values_only=False): # type:ignore
-                for cell in row:
-                    if str(cell.value) == to_find:
-                        print("Collecting Label Info")
-                        t_row = cell.row
-                        t_col = cell.column
-
-                        bridge_serial = sheet.cell(row=t_row, column=t_col).value # type:ignore
-                        router_num = sheet.cell(row=t_row, column=6).value# type:ignore
-                        mac_addr = sheet.cell(row=t_row, column=7).value# type:ignore
-                        gate_num = sheet.cell(row=t_row, column=1).value# type:ignore
-                                
-                        print("Bridge Serial: ", bridge_serial)
-                        print("Router Num: ", router_num)
-                        print("Mac_addr: ", mac_addr)
-                        print("Gate Num: ", gate_num)
-                        mac_addr = str(mac_addr)
-                        
-                        found = True
-                if found:
-                    break
-            if not found:
-                print("Error Couldn't be Logged")
-                    
-            wb.save(excel)
-            
-            with open(filepath, "w") as file:
-                print("Writing Label Info")
-                first_line = "GATE " + str(gate_num) +" SN" + str(bridge_serial) + "," # type:ignore
-                second_line = "PN: " + str(router_num) + "," # type:ignore
-                third_line = "MA: " + str(mac_addr) + "," # type:ignore
-                fourth_line = "IP: " + str(gate_ip) + "," # type:ignore
-                file.write(first_line)
-                file.write(second_line)
-                file.write(third_line)
-                file.write(fourth_line)
-                
-            with open(filepath, "r") as file:
-                print("Label File Contents")
-                print(file.read())
-                print("Programming and Testing Complete.")
-                print("Saving log file...")
-                print("Device programming complete. Continue to next Device.")
-                sys.exit(0)
-                
-        except Exception as e:
-            print(f"An Error Occurred: {e}")
+    print("Programming and testing complete. Continue to the next device.", flush=True)

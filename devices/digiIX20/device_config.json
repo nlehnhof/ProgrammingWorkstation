@@ -1,0 +1,33 @@
+{
+    "bbb_ip": "192.168.7.2",
+    "bbb_user": "raj",
+    "bbb_password": "Jetway",
+    "bbb_subnet_pattern": "192\\.168\\.2\\.\\d{1,3}",
+
+    "router_temp_ip": "192.168.2.1",
+    "router_user": "admin",
+    "router_new_password": "Jetway@dm1n",
+
+    "router_post_restore_ip": "192.168.81.5",
+    "router_post_restore_password": "AAAaaa111!!!",
+    "router_lan_interface": "eth2",
+
+    "firmware_filename": "01_LATEST_LTS_IX20-25.2.56.67-asof-2026APR14.bin",
+    "firmware_remote_name": "ix20-firmware.bin",
+    "firmware_router_path": "/tmp/IX20-firmware.bin",
+
+    "config_filename": "99-CONFIG-BMS-asof-2026APR14-Digi-IX20-25.2.56.67.bin",
+    "config_remote_name": "ix20-99-configs.bin",
+    "config_router_path": "/tmp/IX20-99-configs.bin",
+
+    "pc_static_ip": "192.168.81.10",
+
+    "ssh_timeout": 30,
+    "scp_timeout": 900,
+    "firmware_update_timeout": 900,
+    "config_restore_timeout": 900,
+    "restore_ack_timeout": 120,
+    "reboot_timeout": 420,
+    "firmware_boot_timeout": 900,
+    "cli_timeout": 60
+}

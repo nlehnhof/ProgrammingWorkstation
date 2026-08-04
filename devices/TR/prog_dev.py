@@ -1,942 +1,364 @@
-#GUI
-# import tkinter as tk
-import threading
-import time
-import openpyxl
-from openpyxl.styles import Font
-from openpyxl.worksheet.hyperlink import Hyperlink
+"""GUI-facing orchestration for the Teltonika RUTX08.
 
-#SSH 
-import subprocess
-import paramiko
-from ping3 import ping
+This is the entry point `pages/program_page.py` calls. It does the bookkeeping
+around a run -- look the gate up in the spreadsheet, launch `teltonika.py` as a
+subprocess, run the functional test against the BeagleBone, then record the
+outcome -- while `teltonika.py` does everything that touches the router.
 
-#Python
-import sys
-import subprocess
+Loaded with exec() into a fresh namespace (see program_page.py), so this module
+has no reliable `__file__` and resolves paths from the current working
+directory / `app_root()`. The only required export is `run_main_script`.
+
+Two habits from the previous version are worth naming, because they are why
+this file used to be six times longer and quietly wrong:
+
+* Its output loop ran twice over the same pipe. The first pass drained it, so
+  the second -- which held all the failure detection, the MAC capture and the
+  crash logging -- iterated over an exhausted stream. Every run recorded a
+  success. The shared `status.watch_process` makes one pass.
+* Every spreadsheet update re-scanned the sheet for the gate row and addressed
+  cells by hardcoded column number (`column=7` for the MAC, and so on), copied
+  out four times. `resources.utilities.reporting` does it once, by header name.
+"""
+
 import os
-import re
-from datetime import datetime
-from collections import deque
-import ipaddress
 
-import shutil
-import argparse
-import socket
-import select
+from resources.utilities import status
+from resources.utilities.app_paths import app_root, device_dir, script_command
+from resources.utilities.device_config import load_config
+from resources.utilities.excel_utils import find_column as _find_column
+from resources.utilities.excel_utils import get_header_map as _get_header_map
+from resources.utilities.excel_utils import lookup_excel as _lookup_excel
+from resources.utilities.network_utils import prefix_length
+from resources.utilities.reporting import (
+    COLUMNS,
+    record_result,
+    record_test_result,
+    write_crash_log,
+)
+from resources.utilities.ssh_session import SSHSession
+from resources.utilities.templating import TemplateError, stage_template
+from resources.utilities.wait_utils import run_checked
 
-start_time = time.perf_counter()
-current = os.getcwd()
-print("current dir:", os.getcwd())
-print("files in dir: ", os.listdir())
+TEST_SCRIPT = "FloodLighToggle.py"
+TEST_SUCCESS_MARKER = "Bytes in received"
+PLACEHOLDER_IP = "127.0.0.1"
 
-s_pause = 1
-l_pause = 2
+# The BeagleBone needs its own address on the gate subnet to talk to the
+# router. .123 by convention, moved to .100 when the gate itself owns .123.
+BBB_HOST_OCTET = "123"
+BBB_ALTERNATE_OCTET = "100"
 
-dropdown = None
+# Set by lookup_excel, read by run_main_script. Module-level rather than
+# returned because this module is exec()'d and the GUI reaches in for them.
+gate_ip = None
+gate_netmask = None
+gate_gateway = None
 valid_ip = True
 
-gate_ip = None
-gate_gateway = None
-gate_netmask = None
+# Filled in by load_device_config once a run knows which folder it is in.
+sudo_password = ""
 
-def ssh_bbb_connect():
-    print("Connecting to BBB", flush=True)
-    global ssh_bbb, sftp_bbb
-    bbb_ip = '192.168.7.2'
-    bbb_user = 'raj'
-    bbb_pass = 'Jetway'
 
-    ssh_bbb = paramiko.SSHClient()
-    ssh_bbb.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    ssh_bbb.connect(bbb_ip, username=bbb_user, password=bbb_pass)
-    print("Connected to BBB", flush=True)
-    
-    sftp_bbb = ssh_bbb.open_sftp()
-    time.sleep(s_pause)
-    
-def ssh_bbb_run(cmd):
-    global ssh_bbb
-    stdin, stdout, stderr = ssh_bbb.exec_command(cmd)
-   
-    output = stdout.read().decode()
-    error = stderr.read().decode()
-    
-    if output is not None:
-        print("Output:\n", output, flush=True)
-    if error is not None:
-        print("Errors:\n", error, flush=True)
-    return output
+# ---------------------------------------------------------------------------
+# Spreadsheet access
+# ---------------------------------------------------------------------------
 
-def ssh_bbb_upload(file, bbb_file):
-    global sftp_bbb
-    sftp_bbb.put(file, bbb_file)
-    
-def ssh_bbb_close():
-    print("Closing Connection to BBB", flush=True)
-    global ssh_bbb, sftp_bbb
-    if sftp_bbb:
-        sftp_bbb.close()
-    if ssh_bbb:
-        ssh_bbb.close()
-    time.sleep(s_pause)
-    print("Closed Connection to BBB", flush=True)    
+def get_header_map(sheet):
+    """Header text -> column numbers. See resources/utilities/excel_utils.py."""
+    return _get_header_map(sheet)
 
-def is_valid_ip(ip_string):
-    try:
-        ipaddress.ip_address(ip_string)
-        return True
-    except ValueError:
-        return False
-    
-def validate_subnet(ip_str, netmask_str):
+
+def col(header_map, key, occurrence=None):
+    """Column number for a logical field name such as "mac" or "prg_count".
+
+    Device code names the *field* it wants; the header text it maps to lives in
+    one table (`reporting.COLUMNS`). `occurrence` picks between the sheet's two
+    "Crash Report" columns when the caller needs to be explicit.
     """
-    Determine if an IP belongs to the subnet defined by its own IP and netmask.
-    
-    Args:
-        ip_str (str): IPv4 address (e.g., "10.120.80.4")
-        netmask_str (str): Netmask in dotted decimal (e.g., "255.255.255.0")
-    
-    Returns:
-        tuple: (bool, str) -> (True/False, calculated subnet in CIDR notation)
-    """
-    try:
-        # Convert dotted decimal netmask to prefix length
-        prefix_length = ipaddress.IPv4Network(f"0.0.0.0/{netmask_str}").prefixlen
-        
-        # Build network object from IP + prefix
-        network = ipaddress.IPv4Network(f"{ip_str}/{prefix_length}", strict=False)
-        
-        # Check if IP is in its own network (always True unless invalid input)
-        ip_obj = ipaddress.IPv4Address(ip_str)
-        return (ip_obj in network, str(network))
-    
-    except (ipaddress.AddressValueError, ipaddress.NetmaskValueError, ValueError):
-        return (False, None)
+    name, default_occurrence = COLUMNS[key]
+    return _find_column(
+        header_map, name,
+        default_occurrence if occurrence is None else occurrence,
+    )
 
-    
+
+def _resolve_sheet(sheet, device):
+    """Find an airport sheet given either a full path or a bare filename."""
+    candidates = [
+        sheet,
+        os.path.join("devices", device, sheet),
+        os.path.join(device_dir(device), sheet),
+        os.path.join(app_root(), "devices", device, sheet),
+    ]
+    for candidate in candidates:
+        if candidate and os.path.isfile(candidate):
+            return candidate
+    return sheet
+
+
 def lookup_excel(sheet, gate, device):
-    file_path = os.path.join(os.getcwd(), sheet)
-    # file_path = sheet
-    to_find = gate
+    """Read the gate's network settings into this module's globals.
 
-    global gate_ip
-    global gate_netmask
-    global gate_gateway
-    global valid_ip
-    
+    Sets `valid_ip = False` rather than raising when the sheet is unusable --
+    a missing gate or a malformed address is operator-fixable data, and the
+    caller checks the flag before going anywhere near the hardware.
+    """
+    global gate_ip, gate_netmask, gate_gateway, valid_ip
+
+    gate_ip = gate_netmask = gate_gateway = None
+    valid_ip = True
+
+    path = _resolve_sheet(sheet, device)
     try:
-        print("filepath =", file_path)
-        print("exists+", os.path.exists(file_path))
-        wb = openpyxl.load_workbook(file_path)
-        sheet = wb.active
-        if sheet is None:
-            return
-        
-        for row in sheet.iter_rows(values_only=True):
-            for idx, cell in enumerate(row):
-                if str(cell) == to_find:
-                    if row[idx + 1] is not None:
-                        gate_ip = row[idx - 3]
-                        gate_netmask = row[idx - 2]
-                        gate_gateway = row[idx - 1]
-                        if is_valid_ip(gate_ip) and validate_subnet(gate_ip, gate_netmask):
-                            print(f"Gate IP: {gate_ip}", flush=True)
-                            print(f"Netmask: {gate_netmask}", flush=True)
-                            print(f"Gateway: {gate_gateway}", flush=True)
-                        else:
-                            print(f"Invalid IP and/or subnet: {gate_ip}; {gate_netmask}", flush=True)
-                            print("Select Another Option", flush=True)
-                            valid_ip = False
-                    if row[idx + 10] is not None:
-                        print("This Option has been Programmed Before")
-                        print("Press Start if you Wish to Continue")
+        found = _lookup_excel(path, gate)
+    except (KeyError, ValueError, OSError) as exc:
+        print(f"{exc}", flush=True)
+        print("Select another option.", flush=True)
+        valid_ip = False
+        return
 
-    except Exception as e:
-        print(f"Error Reading File: {type(e).__name__}: {e}")
-        print("Excel Read Error:", type(e).__name__, e)
-        import traceback; traceback.print_exc()
+    gate_ip = found["gate_ip"]
+    gate_netmask = found["netmask"]
+    gate_gateway = found["gateway"]
+    print(f"Gate IP: {gate_ip}", flush=True)
+    print(f"Netmask: {gate_netmask}", flush=True)
+    print(f"Gateway: {gate_gateway}", flush=True)
+
+
+# ---------------------------------------------------------------------------
+# BeagleBone access
+# ---------------------------------------------------------------------------
+
+def ssh_run_shell(session, command):
+    """Run one command on an interactive shell, answering a sudo prompt.
+
+    Needed because `sudo ip addr add ...` asks for a password on stdin, which
+    `exec_command` cannot answer. Returns the shell's output, or None if there
+    is nothing to do.
+
+    The `with` block is the point: the old version returned the live channel to
+    a caller that never closed it, leaking a shell per invocation until the
+    BeagleBone refused new sessions.
+    """
+    if session is None or command is None:
+        return None
+
+    with session.invoke_shell() as shell:
+        shell.recv(1000)  # drain the login banner
+        shell.send(command + "\n")
+        output = shell.recv(4096).decode(errors="replace")
+
+        if "[sudo] password for" in output:
+            shell.send(sudo_password + "\n")
+            output += shell.recv(4096).decode(errors="replace")
+
+        print(output, flush=True)
+        return output
+
+
+def load_device_config(folder):
+    """TR's settings: DEFAULTS -> device_config.json -> TR_* env vars.
+
+    Previously the BBB address and password were hardcoded in three separate
+    places in this file, so `devices/TR/device_config.json` existed but nothing
+    read it and `TR_*` environment variables had no effect. They work now.
+    """
+    global sudo_password
+
+    config = load_config(folder, env_prefix="TR_")
+    # ssh_run_shell answers a sudo prompt and is called from the test flow with
+    # only a session; keeping the password here avoids threading config through
+    # a helper whose whole job is one command.
+    sudo_password = config["bbb_password"]
+    return config
+
+
+def bbb_session(config):
+    print("Connecting to BBB", flush=True)
+    session = SSHSession(
+        config["bbb_ip"], config["bbb_user"], config["bbb_password"],
+        timeout=config["ssh_timeout"],
+    )
+    session.ensure_connected()
+    print("Connected to BBB", flush=True)
+    return session
+
+
+def bbb_address_for(address):
+    """The BeagleBone's own address on the gate's subnet."""
+    parts = str(address).split(".")
+    parts[-1] = BBB_ALTERNATE_OCTET if parts[-1] == BBB_HOST_OCTET else BBB_HOST_OCTET
+    return ".".join(parts)
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
 
 def run_main_script(airport, gate, temp_pass, device):
+    """Program one Teltonika router and record the result in the airport sheet."""
+    report = status.forwarder(globals().get("progress_callback"))
 
-    global gate_netmask, gate_ip, gate_gateway
+    folder = device_dir(device)
+    script_path = os.path.join(folder, "teltonika.py")
+    excel = os.path.join(folder, airport)
+    airport_name = airport.removesuffix(".xlsx")
 
-    dir_path = os.path.dirname(f"devices/{device}/prog_dev.py")
-    print("Directory path:", dir_path)
-    script_path = os.path.join(dir_path, "teltonika.py")
-    sheet = os.path.join(dir_path, airport)
-    print(script_path, flush=True)
-    lookup_excel(sheet, gate, "TR")
-    current_dir = os.getcwd()
-    device_path = os.path.join(current_dir, f"devices\\{device}")
-    script_path = os.path.join(device_path, "teltonika.py")
-    print(script_path, flush=True)
-
-    crash_lines = deque(maxlen=50)
-    error = False
-    traceback = False
-
-    #VALID IP CHECK
-    if valid_ip == False:
-        print("Invalid IP!")
-        print("Exiting Script!")
-        print("Close and Reopen Program!")
-        return
-    
-    #RUN AUTOMATION SCRIPT
+    lookup_excel(excel, gate, device)
+    if not valid_ip:
+        raise RuntimeError(
+            f"Gate {gate} in {airport} has no usable network settings. "
+            "Pick another gate, or correct the spreadsheet."
+        )
 
     if not os.path.isfile(script_path):
         raise FileNotFoundError(f"Script not found: {script_path}")
+
     print("Running teltonika.py...", flush=True)
+    outcome = status.watch_process(
+        script_command(script_path, gate_ip, gate_netmask, gate_gateway, temp_pass),
+        report,
+    )
 
-    process = subprocess.Popen([sys.executable, script_path, str(gate_ip), str(gate_netmask), str(gate_gateway), str(temp_pass)], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
-    for line in process.stdout: # type:ignore
-        print(line, end="")
+    crash_filename = None
+    if outcome["failed"]:
+        crash_filename = write_crash_log(
+            folder, device, airport_name, gate, outcome["log"]
+        )
 
-    process.wait()
-    excel = os.path.join(device_path, airport)
-    airport = airport.removesuffix(".xlsx")
-    print(excel, flush=True)
-
-    run_test_script(device_path, device, airport, excel, gate)
-    
-    # Read output line-by-line in real time
-    with process.stdout: # type: ignore
-        for line in process.stdout: # type: ignore
-            statement = line.strip()
-            crash_lines.append(statement)
-
-            #####################  NON-TRACEBACK ERROR HANDLING #####################
-            
-            if "Incorrect" in line:
-                error = True
-                try:
-                    crash_log = "\n".join(crash_lines)
-                    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-                    crash_folder = "crash_logs"
-                    os.makedirs(crash_folder, exist_ok=True)
-                    # excel_name = excel.removesuffix(".xlsx") # type:ignore
-                    excel_name = airport
-                    print("Airport: ", airport, flush=True)
-                    filename_crash = f"crash_log_{device}_{excel_name}_{gate}_{timestamp}.txt"
-                    filepath = os.path.join(crash_folder, filename_crash)
-
-                    with open(filepath, "w") as file:
-                        file.write(crash_log)
-                    wb = openpyxl.load_workbook(excel)
-                    sheet = wb.active
-                    
-                    to_find = gate
-                    found = False
-                    
-                    current_datetime = datetime.now()
-                    
-                    if sheet is None:
-                        return print("excel not found", flush=True)
-                    for row in sheet.iter_rows(values_only=False):
-                        for cell in row:
-                            if str(cell.value) == to_find:
-                                print("Crash Log")
-                                t_row = cell.row
-                                t_col = cell.column
-                                file_path_crash = os.path.abspath(os.path.join(device_path, f"crash_logs/{filename_crash}")) 
-                                cell = sheet.cell(row=t_row, column=10) # type:ignore
-                                cell.value = filename_crash
-                                cell.hyperlink = file_path_crash
-                                cell.font = Font(color="0000FF", underline="single")
-                                
-                                print("Read Date and Time")
-                                t_cell = sheet.cell(row=t_row, column=8) # type:ignore
-                                t_cell.value = current_datetime
-                                t_cell.font = Font(color="FF0000")
-                                
-                                found = True
-                        if found:
-                            break
-                    
-                    if not found:
-                        print("Error Couldn't be Logged")
-                    
-                    wb.save(excel)
-                    
-                    current_datetime = datetime.now()
-                
-                except Exception as e:
-                    print(f"An Error Occurred: {e}")
-            
-                #create label text file
-                try:
-                    print("Creating Label")
-                    label_log = " "
-                    
-                    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-                    router_labels = "router_labels"
-                    os.makedirs(router_labels, exist_ok=True)
-                    excel_name = airport
-
-                    filename_label = f"label_{device}_{airport}_{gate}_{timestamp}.txt"
-                    filepath = os.path.join(router_labels, filename_label)
-
-                    wb = openpyxl.load_workbook(excel)
-                    
-                    to_find = gate
-                    found = False
-                            
-                    for row in sheet.iter_rows(values_only=False): # type: ignore
-                        for cell in row:
-                            if str(cell.value) == to_find:
-                                print("Collecting Label Info")
-                                t_row = cell.row
-                                t_col = cell.column
-                                bridge_serial = sheet.cell(row=t_row, column=t_col).value # type: ignore
-                                router_num = sheet.cell(row=t_row, column=6).value # type: ignore
-                                mac_addr = sheet.cell(row=t_row, column=7).value # type: ignore
-                                gate_num = sheet.cell(row=t_row, column=1).value # type: ignore
-                                
-                                print("Bridge Serial: ", bridge_serial)
-                                print("Router Num: ", router_num)
-                                print("Mac_addr: ", mac_addr)
-                                print("Gate Num: ", mac_addr)
-                                
-                                found = True
-                        if found:
-                            break
-                        
-                    if not found:
-                        print("Traceback Error Couldn't be Logged")
-                            
-                    wb.save(excel)
-                    print(filepath, flush=True)
-                    print(filepath)
-                    with open(filepath, "w") as file:
-                        print("Writing Label Info")
-                        first_line = "GATE " + str(gate_num) +" SN" + str(bridge_serial) + "," + "PN: " + str(router_num) + "," + "MA: " + str(mac_addr) + "," + "IP: " + str(gate_ip) # type:ignore
-                        file.write(first_line)
-                        
-                    with open(filepath, "r") as file:
-                        print("Label File Contents")
-                        print(file.read())
-                    
-                    wb = openpyxl.load_workbook(excel)
-                    sheet = wb.active
-                            
-                    to_find = gate
-                    found = False
-                            
-                    for row in sheet.iter_rows(values_only=False): # type: ignore
-                        for cell in row:
-                            if str(cell.value) == to_find:
-                                t_row = cell.row
-                                t_col = cell.column
-                                file_path_label = os.path.abspath(os.path.join(device_path, f"router_labels/{filename_label}"))
-                                
-                                #Label
-                                cell = sheet.cell(row=t_row, column=9) # type: ignore
-                                cell.value = filename_label
-                                cell.hyperlink = file_path_label
-                                cell.font = Font(color="0000FF", underline="single")
-                                
-                                #Program Number
-                                cell = sheet.cell(row=t_row, column=11) # type: ignore
-                                if cell.value is None:
-                                    cell.value = int(1)
-                                else:
-                                    cell.value = cell.value + 1
-                                cell.font = Font(color="000000")
-                                
-                                cell = sheet.cell(row=t_row, column=11) # type: ignore
-                                cell.value = "Not Tested"
-                                cell.font = Font(color="000000")
-                                
-                                found = True
-                        if found:
-                            break
-                            
-                    if not found:
-                        print("Label File Couldn't be Logged")
-                            
-                    wb.save(excel)
-
-                except Exception as e:
-                    print(f"An Error Occurred 1: {e}")
-                
-            if "Traceback" in statement:
-                traceback = True
-
-            if "MAC Addr:" in statement:
-                mac_addr = statement.split("MAC Addr:")[1].strip()
-                
-                print("MAC Address: ", mac_addr)
-                
-                try:
-                    wb = openpyxl.load_workbook(excel)
-                    sheet = wb.active
-                    
-                    to_find = gate
-                    found = False
-                    
-                    for row in sheet.iter_rows(values_only=False): # type:ignore
-                        for cell in row:
-                            if str(cell.value) == to_find:
-                                t_row = cell.row
-                                t_col = cell.column
-                                
-                                t_cell = sheet.cell(row=t_row, column=7) # type:ignore
-                                t_cell.value = mac_addr
-                                t_cell.font = Font(color="000000")
-
-                                found = True
-                        if found:
-                            break
-                    
-                    if not found:
-                        print("Mac Address Couldn't be Logged")
-                    
-                    wb.save(excel)
-                    
-                except Exception as e:
-                    print(f"An Error Occurred 2: {e}")
-                
-        # #end of automation python file
-        # process.wait()
-        
-        ################### Traceback File Creation and Logging #####################
-        
-        current_datetime = datetime.now()
-        
-        if traceback is True:
-            try:
-                crash_log = "\n".join(crash_lines)
-                    
-                timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-                crash_folder = "crash_logs"
-                os.makedirs(crash_folder, exist_ok=True)
-                excel_name = excel.removesuffix(".xlsx")
-                print("airport ", airport)
-
-                filename_crash = f"crash_log_2_{airport}_{gate}_{timestamp}.txt"
-                filepath = os.path.join(crash_folder, filename_crash)
-
-                with open(filepath, "w") as file:
-                    file.write(crash_log)
-                    
-                wb = openpyxl.load_workbook(excel)
-                sheet = wb.active
-                    
-                to_find = gate
-                found = False
-                    
-                for row in sheet.iter_rows(values_only=False): # type:ignore
-                    for cell in row:
-                        if str(cell.value) == to_find:
-                            t_row = cell.row
-                            t_col = cell.column
-                            file_path_crash = os.path.abspath(f"crash_logs/{filename_crash}")
-                            cell = sheet.cell(row=t_row, column=10) # type:ignore
-                            cell.value = filename_crash
-                            cell.hyperlink = file_path_crash
-                            cell.font = Font(color="0000FF", underline="single")
-                                
-                            found = True
-                    if found:
-                        break
-                    
-                if not found:
-                    print("Traceback Error Couldn't be Logged")
-                    
-                wb.save(excel)
-
-            except Exception as e:
-                print(f"An Error Occurred 3: {e}")
-        
-        ########################## ADD TIMESTAMP ############################
-        
-        current_datetime = datetime.now()
-        
-        try:
-            wb = openpyxl.load_workbook(excel)
-            sheet = wb.active
-            
-            to_find = gate
-            print("selected excel", excel)
-            print("selected gate", gate)
-            found = False
-            
-            for row in sheet.iter_rows(values_only=False): # type:ignore
-                for cell in row:
-                    if str(cell.value) == to_find:
-                        t_row = cell.row
-                        t_col = cell.column
-                        print("row:", t_row)
-                        print("col:", t_col)
-                        print("Error Value: ", error)
-                        
-                        #change date time color to red
-                        if error is True or traceback is True:
-                            t_cell = sheet.cell(row=t_row, column=8)# type:ignore
-                            t_cell.value = current_datetime
-                            t_cell.font = Font(color="FF0000")
-                        
-                        #date time color to black
-                        else:
-                            print("correct spot")
-                            t_cell = sheet.cell(row=t_row, column=8) # type:ignore
-                            t_cell.value = current_datetime
-                            t_cell.font = Font(color="000000")
-                            
-                            print("Trying to Remove Crash Log File")
-
-                            #remove the crash file if it exists
-                            t_cell = sheet.cell(row=t_row, column=10) # type:ignore
-                            print(t_cell.value)
-                            t_cell.value = " "
-
-                        found = True
-                if found:
-                    break
-            
-            if not found:
-                print("Date and Time Couldn't be Logged")
-            
-            wb.save(excel)
-            
-        except Exception as e:
-            print(f"An Error Occurred 4: {e}")
-            
-        ########################## CREATE A LABEL ##########################
-        try:
-            print("Creating Label")            
-            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-            router_labels = "router_labels"
-            os.makedirs(router_labels, exist_ok=True)
-            excel_name = excel.removesuffix(".xlsx")
-
-            filename_label = f"labe2l_{airport}_{gate}_{timestamp}.txt"
-            filepath = os.path.join(router_labels, filename_label)
-
-            wb = openpyxl.load_workbook(excel)
-            sheet = wb.active
-                    
-            to_find = gate
-            found = False
-                    
-            for row in sheet.iter_rows(values_only=False): # type:ignore
-                for cell in row:
-                    if str(cell.value) == to_find:
-                        print("Collecting Label Info")
-                        t_row = cell.row
-                        t_col = cell.column
-
-                        bridge_serial = sheet.cell(row=t_row, column=t_col).value # type:ignore
-                        router_num = sheet.cell(row=t_row, column=6).value# type:ignore
-                        mac_addr = sheet.cell(row=t_row, column=7).value# type:ignore
-                        gate_num = sheet.cell(row=t_row, column=1).value# type:ignore
-                                
-                        print("Bridge Serial: ", bridge_serial)
-                        print("Router Num: ", router_num)
-                        print("Mac_addr: ", mac_addr)
-                        print("Gate Num: ", gate_num)
-                        mac_addr = str(mac_addr)
-                        
-                        found = True
-                if found:
-                    break
-            if not found:
-                print("Error Couldn't be Logged")
-                    
-            wb.save(excel)
-            
-            with open(filepath, "w") as file:
-                print("Writing Label Info")
-                first_line = "GATE " + str(gate_num) +" SN" + str(bridge_serial) + "," # type:ignore
-                second_line = "PN: " + str(router_num) + "," # type:ignore
-                third_line = "MA: " + str(mac_addr) + "," # type:ignore
-                fourth_line = "IP: " + str(gate_ip) + "," # type:ignore
-                file.write(first_line)
-                file.write(second_line)
-                file.write(third_line)
-                file.write(fourth_line)
-                
-            with open(filepath, "r") as file:
-                print("Label File Contents")
-                print(file.read())
-                print("Programming and Testing Complete.")
-                print("Saving log file...")
-                print("Device programming complete. Continue to next Device.")
-                sys.exit(0)
-                
-        except Exception as e:
-            print(f"An Error Occurred: {e}")
-
-def run_test_script(device_path, device, airport, excel, gate):
-# def run_test_script():
-    def ssh_bbb_connect():
-        global ssh_bbb, sftp_bbb
-        bbb_ip = '192.168.7.2'
-        bbb_user = 'raj'
-        bbb_pass = 'Jetway'
-
-        ssh_bbb = paramiko.SSHClient()
-        ssh_bbb.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        ssh_bbb.connect(bbb_ip, username=bbb_user, password=bbb_pass)
-        
-        sftp_bbb = ssh_bbb.open_sftp()
-        time.sleep(1)
-    
-    def ssh_bbb_run(cmd):
-        global ssh_bbb
-        stdin, stdout, stderr = ssh_bbb.exec_command(cmd)
-        output = stdout.read().decode()
-        error = stdout.read().decode()
-        if output is not None:
-            print(output)
-        if error is not None:
-            print(error)
-        return output
-    
-    def ssh_run_shell(client=None, command=None):
-        global ssh_bbb
-        bbb_pass = "Jetway"
-        
-        print(client)
-        if client is None:
-            return
-        shell = client.invoke_shell()
-            
-        time.sleep(1)
-        shell.recv(1000)
-        
-        if command is None:
-            return
-        shell.send(command + '\n')
-        time.sleep(1)
-        output = shell.recv(1000).decode()
-        time.sleep(4)
-        
-        #add static ip
-        if "[sudo] password for" in output:
-            shell.send(bbb_pass + '\n')
-            time.sleep(1)
-            output += shell.recv(2000).decode()
-            time.sleep(2)
-
-        print(output)
-        return shell
-
-    #error value
-    output1 = None
-    output2 = None
-    output3 = None
-    output4 = None
-    test_error = None
-    
-    dir_path = os.path.dirname(f"devices/{device}/prog_dev.py")
-    print("Directory path:", dir_path)
-    sheet = os.path.join(dir_path, airport+".xlsx")
-
-    lookup_excel(sheet, gate, device)
-
-    if valid_ip == False:
-        print("Invalid IP!")
-        print("Exiting Script!")
-        print("Close and Reopen Program!")
-        return
-    print("Copying Test File from Backup Folder")
-
-    print("Getting router ip...", flush=True)
-    ssh_bbb_connect()
-    time.sleep(s_pause)
-    output = ssh_bbb_run("ip addr show eth0")
-    time.sleep(s_pause)
-
-    # Regex for IPV4
-    pattern_ipv4 = r'\b10.\d{1,3}\.\d{1,3}.123\b'
-    ipv4s = re.findall(pattern_ipv4, output)
-    print(ipv4s, flush=True)
-    # for addr in ipv4s:
-    #     if addr != "10.28.18.123":
-    #         print(f"Router already programmed to IP:{addr}", flush=True)
-    #         gate_ip = str(ipv4s[2])
-
-    source_folder = os.path.join(device_path, 'og_testfile')
-    destination_folder = os.path.join(device_path, 'testfile')
-
-    os.makedirs(destination_folder, exist_ok=True)
-
-    for filename in os.listdir(source_folder):
-        source_path = os.path.join(source_folder, filename)
-        destination_path = os.path.join(destination_folder)
-        
-        if os.path.isfile(source_path):
-            shutil.copy2(source_path, destination_path)
-
-    old_ip = "127.0.0.1"
-    new_ip = str(gate_ip)
-    print("new_ip: ", new_ip, flush=True)
-
-    with open(os.path.join(device_path, f"testfile/FloodLighToggle.py"), 'r') as file:
-        content = file.read()
-        
-    print("Replacing Old Gate Ip")
-    time.sleep(1)
-    updated_content = content.replace(old_ip, new_ip)
-
-    with open(os.path.join(device_path, f"testfile/FloodLighToggle.py"), 'w') as file:
-        file.write(updated_content)
-
-    with open(os.path.join(device_path, f"testfile/FloodLighToggle.py"), 'r') as file:
-        verify = file.read()
-        if new_ip in verify:
-            print("New Gate IP Updated")
-            print("New Gate IP: ", new_ip, flush=True)
-            
-        else:
-            print("Incorrect! New Gate IP Not Updated Dash")
-            print("old ip: ", old_ip)
-            test_error = True
-            output1 = "New Gate IP Did Not Update Correctly!"
-            
-    time.sleep(s_pause)
-
-    ssh_bbb_connect()
-    print("Copying FloodLighToggle.py File to BBB")
-    time.sleep(s_pause)
-    ssh_bbb_upload(os.path.join(device_path, "testfile/FloodLighToggle.py"), "/home/raj/FloodLighToggle.py")
-    time.sleep(s_pause)
-
-    print("Verifying FloodLighToggle.py File Upload")
-    time.sleep(s_pause)
-    output = ssh_bbb_run("ls -l /home/raj/")
-    time.sleep(s_pause)
-    
-    if "FloodLighToggle.py" in output:
-        print("FloodLighToggle.py found on BBB")
-            
+    # The sheet is stamped either way -- a red timestamp and a crash-log link
+    # are how a failure gets recorded -- but a failed run writes no label. A
+    # printable label for a router that did not program is worse than none,
+    # because somebody can stick it on.
+    #
+    # This milestone is reported here rather than in teltonika.py: the label and
+    # the sheet are written by this process, after the hardware script exits.
+    if outcome["failed"]:
+        report("label", status.SKIPPED, "run failed -- no label produced")
     else:
-        print("Incorrect! FloodLighToggle.py not found on BBB!")
-        ssh_bbb_close()
-        exit()
-        test_error = True
-        output2 = "FloodLighToggle.py not found on BBB!"
-        
-    time.sleep(s_pause)
-    print("\n")
-    
-    #add local ip to BBB
-    ip_parts = gate_ip.split(".") # type:ignore
-    print("ip_parts: ", ip_parts)
-    end_num = ip_parts[-1]
-    if end_num == "123":
-        ip_parts[-1] = "100"
+        report("label", status.RUNNING)
+
+    label_filename = record_result(
+        device_dir=folder,
+        excel_path=excel,
+        device=device,
+        airport=airport_name,
+        gate=gate,
+        gate_ip=gate_ip,
+        mac_addr=outcome["mac"],
+        failed=outcome["failed"],
+        crash_filename=crash_filename,
+        write_label=not outcome["failed"],
+    )
+
+    if outcome["failed"]:
+        message = outcome["detail"] or "Router programming failed. See the crash log."
+        print("Programming failed. Check the crash log.", flush=True)
+        raise RuntimeError(message)
+
+    if label_filename:
+        report("label", status.PASS, label_filename)
+        print(f"Label written: {label_filename}", flush=True)
     else:
-        ip_parts[-1] = "123"
-    bbb_ip = ".".join(ip_parts)
-    print(bbb_ip)
-    print("bbb_ip: ", bbb_ip, flush=True)
-    
-    print("Setting Up Static IP of BBB to Router")
-    time.sleep(1)
-    print("Displaying Current IP(s)")
-    time.sleep(1)
-    ssh_bbb_run("ip addr show eth0")
-    time.sleep(1)
-    print("Adding Static IP to access Router")
-    time.sleep(1)
-    
-    # Adding static IP to access Router
+        report("label", status.FAIL, "label could not be written")
+
+    # Only test a router that programmed. Testing one that did not just
+    # produces a second, confusing failure.
+    run_test_script(folder, device, airport_name, excel, gate, report)
+
+    print("Programming and testing complete. Continue to the next device.", flush=True)
+
+
+def run_test_script(folder, device, airport, excel, gate, report=None):
+    """Drive the Modbus floodlight toggle from the BeagleBone.
+
+    Copies the pristine test script out of `og_testfile/`, points it at this
+    gate's address, uploads it, gives the BeagleBone an address on the gate
+    subnet, and runs it. Success is the script reporting bytes received back
+    from the PLC.
+    """
+    report = report or status.forwarder(globals().get("progress_callback"))
+    report("testing", status.RUNNING)
+
+    config = load_device_config(folder)
+    failures = []
+
+    print("Copying the test file from the backup folder", flush=True)
+    local_script = stage_test_script(folder, gate_ip)
+    if local_script is None:
+        failures.append(f"{TEST_SCRIPT} could not be prepared locally.")
+
+    session = None
     try:
-        ssh_run_shell(ssh_bbb, f"sudo ip addr add local {bbb_ip}/24 dev eth0")
-    except Exception as e:
-        output = e
-         
-    print(f"Added {bbb_ip}/24 Static IP to eth0")
-    time.sleep(1)
-    print("Displaying Current IP(s)")
-    time.sleep(1)
-    
-    output = ssh_bbb_run("ip addr show eth0")
-    
-    if f"{bbb_ip}" not in output:
-        test_error = True
-        output3 = f"{bbb_ip} not added to BBB successfully"
-        
-    time.sleep(1)
-    
-    ################## RUN TOGGLE SCRIPT ##################
-    print("Running python test script now...", flush=True)
-    output = ssh_bbb_run("python FloodLighToggle.py")
-    
-    crash_log = []
-    
-    if "Bytes in received" not in output:
-        test_error = True
-        
-        if output1 is not None:
-            crash_log.append(output1)
-        if output2 is not None:
-            crash_log.append(output2)
-        if output3 is not None:
-            crash_log.append(output3)
-        if output is not None:
-            crash_log.append(output)
-                    
-        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        crash_folder = "crash_logs"
-        os.makedirs(crash_folder, exist_ok=True)
-        excel_name = excel.removesuffix(".xlsx")
+        session = bbb_session(config)
 
-        filename_crash = f"test_crash_log_{airport}_{gate}_{timestamp}.txt"
-        filepath = os.path.join(crash_folder, filename_crash)
-        
-        with open(filepath, "w") as file:
-            file.write("\n".join(crash_log))
-            
+        if local_script:
+            print(f"Copying {TEST_SCRIPT} to the BBB", flush=True)
+            session.upload(local_script, f"/home/{config['bbb_user']}/{TEST_SCRIPT}")
+
+            listing, _, _ = run_checked(session, f"ls -l /home/{config['bbb_user']}/")
+            if TEST_SCRIPT not in listing:
+                failures.append(f"Incorrect! {TEST_SCRIPT} not found on the BBB.")
+
+        bbb_ip = bbb_address_for(gate_ip)
+        prefix = prefix_length(gate_netmask)
+        print(f"Adding {bbb_ip}/{prefix} to the BBB so it can reach the router", flush=True)
+        ssh_run_shell(session, f"sudo ip addr add local {bbb_ip}/{prefix} dev eth0")
+
+        addresses, _, _ = run_checked(session, "ip addr show eth0")
+        if bbb_ip not in addresses:
+            failures.append(f"Incorrect! {bbb_ip} was not added to the BBB.")
+
+        print("Running the test script now...", flush=True)
+        output, _, _ = run_checked(
+            session, f"python {TEST_SCRIPT}", timeout=config["test_script_timeout"]
+        )
+        if TEST_SUCCESS_MARKER not in output:
+            failures.append(f"Incorrect! The test script did not report "
+                            f"'{TEST_SUCCESS_MARKER}'.")
+            failures.append(output)
+
+    except Exception as exc:
+        failures.append(f"Incorrect! Test failed: {type(exc).__name__}: {exc}")
+    finally:
+        if session is not None:
+            print("Closing Connection to BBB", flush=True)
+            session.close()
+
+    failed = bool(failures)
+    crash_filename = None
+    if failed:
+        print("Error found during the router test", flush=True)
+        crash_filename = write_crash_log(
+            folder, f"test_{device}", airport, gate, failures
+        )
+        report("testing", status.FAIL, failures[0])
     else:
-        test_error = False
+        print("No error during the router test", flush=True)
+        report("testing", status.PASS)
 
-    #######################################################
+    record_test_result(folder, excel, gate, failed=failed, crash_filename=crash_filename)
 
-    #Adding Test Timestamp
-    current_datetime = datetime.now()
 
-    wb = openpyxl.load_workbook(excel)
-    sheet = wb.active
-                            
-    to_find = gate
-    found = False
-      
-    for row in sheet.iter_rows(values_only=False): # type:ignore
-        for cell in row:
-            if str(cell.value) == to_find:
-                print("Collecting Label Info")
-                t_row = cell.row
-                t_col = cell.column
-                bridge_serial = sheet.cell(row=t_row, column=t_col + 1).value # type:ignore
-                router_num = sheet.cell(row=t_row, column=t_col + 2).value # type:ignore
-                mac_addr = sheet.cell(row=t_row, column=t_col + 3).value # type:ignore
-                                
-                print("Bridge Serial: ", bridge_serial)
-                print("Router Num: ", router_num)
-                print("Mac_addr: ", mac_addr)
-                                
-                found = True
-        if found:
-            break
-                        
-    if not found:
-        print("Traceback Error Couldn't be Logged")
-                            
-    wb.save(excel)
-                    
-    ################# ERROR OCCURED DURING TESTING EXCEL LOGGING #################
-                
-    if test_error is True:
-        print("Error Found During Router Test")
-        
-        try:
-            wb = openpyxl.load_workbook(excel)
-            sheet = wb.active
-            
-            to_find = gate
-            print("Test Selected excel: ", excel)
-            print("Selected gate: ", gate)
-            found = False
-            
-            for row in sheet.iter_rows(values_only=False): # type:ignore
-                for cell in row:
-                    if str(cell.value) == to_find:
-                        t_row = cell.row
-                        t_col = cell.column
-                        print("Row:", t_row)
-                        print("Col:", t_col)
-                        print("Test Error Value: ", test_error)
+def stage_test_script(folder, address):
+    """Copy `og_testfile/` to `testfile/` and point the script at `address`.
 
-                        t_cell = sheet.cell(row=t_row, column=12) # type:ignore
-                        t_cell.value = current_datetime
-                        t_cell.font = Font(color="FF0000")
+    The originals are never edited in place: each run rewrites a fresh working
+    copy, so a previous gate's address cannot leak into this one's test. Shared
+    with teltonika.py, which does the same for `og_configs/`.
 
-                        t_row = cell.row
-                        t_col = cell.column
-                        file_path_crash = os.path.abspath(os.path.join(device_path, f"crash_logs/{filename_crash}"))  # type:ignore
-                        cell = sheet.cell(row=t_row, column=13) # type:ignore
-                        cell.value = filename_crash # type:ignore
-                        cell.hyperlink = file_path_crash
-                        cell.font = Font(color="0000FF", underline="single")
-                        
-                        cell = sheet.cell(row=t_row, column=14) # type:ignore
-                        if cell.value is None:
-                            cell.value = int(1)
-                        else:
-                            cell.value = cell.value + 1
-                            cell.font = Font(color="000000")
-                            
-                        found = True
-
-                if found:
-                    break
-            
-            if not found:
-                print("Date and Time Couldn't be Logged")
-            
-            wb.save(excel)
-            
-        except Exception as e:
-            print(f"An Error Occurred: {e}")
-            
-    ################ NO ERROR DURING TESTING EXCEL LOGGING ################
-    
-    else:
-        print("No Error During Router Test")
-        
-        try:
-            wb = openpyxl.load_workbook(excel)
-            sheet = wb.active
-            
-            to_find = gate
-            print("Test Selected excel: ", excel)
-            print("Test Selected gate: ", gate)
-            found = False
-            
-            for row in sheet.iter_rows(values_only=False): # type:ignore
-                for cell in row:
-                    if str(cell.value) == to_find:
-                        t_row = cell.row
-                        t_col = cell.column
-                        print("row:", t_row)
-                        print("col:", t_col)
-                        print("Test Error Value: ", test_error)
-
-                        t_cell = sheet.cell(row=t_row, column=12) # type:ignore
-                        t_cell.value = current_datetime
-                        t_cell.font = Font(color="000000")
-                            
-                        print("Trying to Remove Crash Log File")
-
-                        #remove the crash file if it exists
-                        t_cell = sheet.cell(row=t_row, column=13) # type:ignore
-                        print(t_cell.value)
-                        t_cell.value = " "
-
-                        #Test Number Increase by 1
-                        cell = sheet.cell(row=t_row, column=14) # type:ignore
-                        if cell.value is None:
-                            cell.value = int(1)
-                        else:
-                            cell.value = cell.value + 1
-                            cell.font = Font(color="000000")
-                                
-                        found = True
-                if found:
-                    break
-            
-            if not found:
-                print("Date and Time Couldn't be Logged")
-            
-            wb.save(excel)
-            
-        except Exception as e:
-            print(f"An Error Occurred: {e}")
-
-end_time = time.perf_counter()
-
-# """
+    Returns the staged path, or None if it could not be prepared -- the caller
+    records that as a test failure rather than aborting.
+    """
+    try:
+        return stage_template(
+            os.path.join(folder, "og_testfile"),
+            os.path.join(folder, "testfile"),
+            TEST_SCRIPT,
+            PLACEHOLDER_IP,
+            address,
+        )
+    except TemplateError as exc:
+        print(f"Incorrect! Could not prepare {TEST_SCRIPT}: {exc}", flush=True)
+        return None

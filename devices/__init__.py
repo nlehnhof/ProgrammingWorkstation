@@ -1,9 +1,12 @@
-from pathlib import Path
+"""Per-device folders -- one directory per device type the app can program.
 
-current_dir = Path(__file__).parent
-registered_devices = [p.name for p in current_dir.iterdir() if p.is_dir() and p.name != "__pycache__"]
+Each subfolder holds everything that device needs: `prog_dev.py` (the entry
+point the app calls), its hardware script, `device_config.json`, `checklist.json`,
+`instructions.txt` and the airport spreadsheets.
 
-__all__ = ["registered_devices"]
-
-# Print results
-print("Registered Devices:", registered_devices)
+Nothing is imported from here. Device folders are discovered on disk at the
+moment they are needed -- see `resources.utilities.app_paths.registered_devices`
+and `core.manager.DeviceManager.names`. Scanning lazily rather than at import
+time is what lets a device be added to a running, packaged build by dropping a
+folder next to the .exe.
+"""

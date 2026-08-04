@@ -1,0 +1,14 @@
+{
+    "device_image": null,
+    "steps": [
+        {"id": "check_ip",    "label": "Checking IP",          "estimate": "~10 sec"},
+        {"id": "staging",     "label": "Staging config files", "estimate": "~15 sec"},
+        {"id": "firmware",    "label": "Firmware install",     "estimate": "~3 min"},
+        {"id": "reboot_1",    "label": "First reboot",         "estimate": "~2 min"},
+        {"id": "config_push", "label": "Configuration push",   "estimate": "~1 min"},
+        {"id": "identity",    "label": "Reading MAC address",  "estimate": "~5 sec"},
+        {"id": "reboot_2",    "label": "Final reboot",         "estimate": "~1.5 min"},
+        {"id": "label",       "label": "Making Label",         "estimate": "~5 sec"},
+        {"id": "testing",     "label": "Testing",              "estimate": "~1 min"}
+    ]
+}

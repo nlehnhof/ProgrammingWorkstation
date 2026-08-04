@@ -1,46 +1,68 @@
 # Programming Workstation — Documentation
 
-**Version:** 1.0 · **Branch:** `sparse` · **Last commit:** `2e84f6c` — "DOCS.md file" (2026-07-30)
+**Version:** 2.1 · **Branch:** `docs-and-simplify` · **Last commit:** `HEAD` — "Migrate teltonika.py onto the shared layer" (2026-08-04)
 
 *Doc style note: formal structure with easy-to-read explanations, Mermaid diagrams for workflow, and `file:line` citations (no inline code excerpts). Set by user preference when this folder was created.*
 
+> **In a hurry, or not a programmer?** Read [`CHEAT_SHEET.md`](CHEAT_SHEET.md) instead — one page, plain language, no code.
+
 ## Overview
 
-The Programming Workstation is a PyQt5 desktop app that walks a technician through provisioning field devices — today, a Teltonika RUTX08 router used in airport gate-control installations, plus an early-stage Digi IX20 implementation. The operator registers a device type, confirms hardware wiring, picks an airport/gate from an Excel sheet, and the app runs that device's programming script (firmware flash, config push, functional test), then writes a label file and updates the Excel log.
+The Programming Workstation is a PyQt5 desktop app that walks a technician through provisioning field devices — a Teltonika RUTX08 router (`devices/TR/`) and a Digi IX20 router (`devices/digiIX20/`), both used in airport gate-control installations. The operator registers a device type, confirms hardware wiring, picks an airport/gate from an Excel sheet, and the app runs that device's programming script (firmware flash, config push, functional test), then writes a label file and updates the Excel log. Programming runs on a background thread, and a live Status panel shows each milestone turning green PASS or red FAIL as it completes.
 
-**Important context for anyone reading these docs:** this repository is mid-refactor. A shared, tested utility layer (`resources/utilities/`) and a set of higher-level docs (`DOCUMENTATION_OVERVIEW.md`, `devices/TR/TR_DEVICE_DOCUMENTATION.md`) describe a target architecture — pooled SSH sessions, header-based Excel lookups, layered config precedence. The actual production script for the TR device (`devices/TR/teltonika.py`, `devices/TR/prog_dev.py`) has **not** been updated to use that layer yet: it still opens raw `paramiko` connections, hardcodes credentials, and reads Excel columns by position. This documentation set describes the code as it actually runs today, and calls out the gap explicitly where it matters — see `CODE_EXPLAIN.md`.
+## What changed in `e96074a`
+
+The previous version of these docs described a codebase split in two: a well-tested shared utility layer that only the Digi used, and a Teltonika implementation that duplicated all of it badly. **That split is gone.** Both devices now sit on the same shared layer, and the layer itself is complete.
+
+Three things are worth knowing before reading further:
+
+1. **Spreadsheets are read by column *name*, never by position.** `resources/utilities/excel_utils.py` resolves every column through the header row. The old positional reads (`row[idx - 3]`, `column=7`) silently returned the wrong cell whenever a sheet's columns differed.
+2. **The end-of-run bookkeeping is one module.** Crash log, spreadsheet stamp and label file all live in `resources/utilities/reporting.py`. Each device's `prog_dev.py` previously wrote that out longhand, four times over.
+3. **`device_types/` no longer exists.** Its four files were working code that nothing ever used — the classes were imported in three places and never instantiated. Devices are folders, not classes — that has always been the real extension mechanism.
+
+The measurable effect: `devices/TR/prog_dev.py` went from 943 to 364 lines, `devices/digiIX20/prog_dev.py` from 353 to 104, and the test suite from 44 passing / 6 failing / 2 uncollectable modules to **83 passing**.
+
+**`devices/TR/teltonika.py` has since been migrated too**, so there is no longer any part of either device sitting off the shared layer. It became seven dispatched milestones with pooled connections and completion-driven waits, and TR gained the live Status checklist. Its line count barely moved (571 → 611 total, 411 → 403 executable) because 82 repetitive `sftp.put()` calls left and structure arrived in their place.
+
+## Where to start
+
+- **Not a developer, or just want the gist?** → [`CHEAT_SHEET.md`](CHEAT_SHEET.md)
+- **New machine, nothing installed yet?** → [`SETUP.md`](SETUP.md) — prerequisites, virtual environment, administrator rights, building the .exe, and a verification checklist.
+- **Repo already runs, want to use it?** → `INSTRUCTIONS.md`
+- **Want to understand how it fits together?** → `WORKFLOW.md`, then `CODE_EXPLAIN.md`
 
 ## Files in this folder
 
-**WORKFLOW.md** : Traces page-to-page navigation, the device-programming call chain (including the `exec()`-based script loading), and the config-loading precedence — with Mermaid diagrams.
-Keywords: stacked widget, navigation, `exec()`, subprocess, data flow, config precedence.
+**WORKFLOW.md** : Traces application startup, page-to-page navigation, and the full device-programming call chain — the background worker thread, the `exec()`-based script loading, the `##STATUS##` milestone protocol, and config precedence. Also covers how the app locates its data when run from source versus as a packaged .exe.
+Keywords: stacked widget, navigation, `QThread`, `exec()`, subprocess, `##STATUS##`, config precedence, `app_root`, packaging.
 Questions answered:
 1. How does the user move between pages, and what triggers each transition?
 2. What actually happens, file by file, when "Program Device" is clicked?
-3. Why does `devices/TR/prog_dev.py` run via `exec()` instead of a normal import?
-4. How does device configuration get resolved (and which scripts actually use that resolution)?
-5. Where do crash logs, labels, and Excel updates get written?
+3. Why does `prog_dev.py` run via `exec()` instead of a normal import, and what is in its namespace?
+4. How do milestone updates get from the hardware script to the Status panel?
+5. How does the app find `devices/` when it is packaged as an .exe?
 
-**CODE_EXPLAIN.md** : Function-level walkthrough of every source file in the app (excluding `devices/TR/`, which has its own nested documentation folder), with a complexity rating per file.
-Keywords: `DeviceManager`, `SSHSession`, `ManagedShell`, `extract_mac`, error handling, `QStackedWidget`.
+**CODE_EXPLAIN.md** : Function-level walkthrough of every source file in the app (excluding `devices/TR/`, which has its own nested documentation folder), with a complexity rating per file. Opens with a section on what the `e96074a` simplification removed and why.
+Keywords: `DeviceManager`, `ProgramWorker`, `StatusPanel`, `SSHSession`, `excel_utils`, `reporting`, `status`, `wait_utils`, error handling.
 Questions answered:
-1. What does each file in `core/`, `pages/`, `device_types/`, and `resources/utilities/` actually do?
-2. Which of the "new" `resources/utilities/` functions are actually wired into the app, versus only covered by tests?
-3. Where are the known bugs and copy-paste artifacts (stale header comments, hardcoded paths)?
-4. What triggers the global error dialog and where do crash logs get written?
-5. Is `device_types/` (the `Device` abstract base class) actually used?
+1. What does each file in `core/`, `pages/`, `resources/utilities/`, and `devices/digiIX20/` actually do?
+2. What lives in the shared utility layer, and which device uses which part of it?
+3. Why is a spreadsheet column looked up by header name instead of by number?
+4. What triggers the global error dialog, and where do crash logs get written?
+5. How does a milestone travel from a hardware script to a row in the Status panel?
 
-**INSTRUCTIONS.md** : Setup and a first-run walkthrough for a developer or operator, with warnings and an FAQ.
-Keywords: setup, venv, pytest, running the app, adding a device type.
+**INSTRUCTIONS.md** : Day-to-day usage for a developer or operator already set up — a first-run walkthrough, warnings, how to add a device type, and an FAQ. For first-time setup on a new machine, see `SETUP.md` instead.
+Keywords: running the app, pytest, Status panel, `checklist.json`, adding a device type, administrator rights.
 Questions answered:
-1. How do I get the app running locally?
-2. How do I run the test suite, and why does it fail if I use the wrong Python?
-3. How do I add a brand-new device type?
+1. How do I run the app and the test suite?
+2. What does a programming run look like from the operator's side?
+3. How do I add a brand-new device type, with or without a live checklist?
 4. What are the known footguns before I touch device automation code?
-5. What's left to do / known bugs worth fixing?
+5. What is still worth fixing?
 
 ## Related documentation
 
-- `devices/TR/documentation/` — nested documentation folder for the Teltonika RUTX08 device implementation specifically (it's substantial enough, and self-contained enough, to warrant its own set).
-- `../DOCUMENTATION_OVERVIEW.md` and `../devices/TR/TR_DEVICE_DOCUMENTATION.md` — pre-existing docs describing the target/aspirational architecture. Useful for understanding *where the refactor is headed*, but not an accurate description of what currently runs.
-- `../resources/documentation/DOCS.md` — the original documentation style guide this folder's rules are based on.
+- `CHEAT_SHEET.md` — one-page, plain-language summary of what the app is and how it is built. Written for someone who is not going to read any code.
+- `SETUP.md` — first-time setup on a device that has never run this before: prerequisites, environment creation, UAC/administrator behaviour, building and staging the packaged .exe.
+- `../devices/TR/documentation/` — nested documentation folder for the Teltonika RUTX08 device implementation specifically.
+- `../resources/documentation/DOCS.md` — the documentation style guide this folder's rules are based on.

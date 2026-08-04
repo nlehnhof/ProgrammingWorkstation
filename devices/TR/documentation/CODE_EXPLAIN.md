@@ -1,36 +1,72 @@
 # CODE_EXPLAIN.md — TR Device
 
-**Last commit:** `2e84f6c` — "DOCS.md file" (2026-07-30)
+**Last commit:** `HEAD` (2026-08-04) — "Migrate teltonika.py onto the shared layer"
 
-## `teltonika.py` — **Complex** (569 lines, procedural top-level script, not a set of importable functions)
+## Migration complete
 
-Unlike most of the codebase, this file has almost no function decomposition beyond the small SSH helpers at the top — the 9-step automation (see `WORKFLOW.md`) is a single linear sequence of module-level statements that runs immediately on import/execution. It is always invoked as a subprocess (`sys.executable teltonika.py <gate_ip> <netmask> <gateway> <temp_pass>`, `devices/TR/teltonika.py:19-23`), never imported.
+Both files in this folder now sit on `resources/utilities/`. `prog_dev.py` was migrated first (943 → 364 lines); `teltonika.py` followed.
 
-- `ssh_bbb_connect`/`ssh_bbb_run`/`ssh_bbb_upload`/`ssh_bbb_close` (`:54,69,80,84`) and the router equivalents `ssh_router_connect`/`ssh_router_run`/`ssh_router_upload`/`ssh_router_close` (`:96,149,160,164`) are the only functions. Each opens/uses/closes a fresh `paramiko.SSHClient` via module-level globals (`ssh_bbb`, `ssh_router`, `sftp_bbb`, `sftp_router`) — there is no connection pooling, unlike `resources/utilities/ssh_session.py`'s `SSHSession`.
-- `ssh_router_connect(num, admin_num)` (`:96`) has two modes: `num="temp"` tries the temporary factory IP/password first, falling back to the "new" IP/password on failure (nested bare `except:` at `:120-126`); any other value connects directly with the new admin credentials. This dual-path logic is what makes reruns against an already-partially-configured router behave differently from a fresh router.
-- Hardcoded values live directly in these functions: BBB at `192.168.7.2` / `raj` / `Jetway` (`:57-59`), router temp IP `192.168.1.1`, new IP `192.168.81.1`, new password `Jetway@dm1n` (`:46,99,122,129`), firmware filename `RUTX_R_00.07.22.3_WEBUI.bin` (`:334`).
-- MAC extraction (`:497-518`) only understands the single `"eth0" ... "HWaddr"` format — the more robust multi-format `resources/utilities/mac_utils.extract_mac` exists but isn't called here.
-- The two "already programmed" checks (`:194-201` at start, `:567-570` at end) use a regex, `r'\b10.\d{1,3}\.\d{1,3}.123\b'` (`:195`), that (note the unescaped `.` before `123`) matches more loosely than a real dotted-quad check — it's checking for BBB's own static-IP convention (ending in `.123`), not validating the router's address.
+`teltonika.py`'s line count barely moved — 571 → 611 total, and **411 → 403 executable lines** — but that number hides the change. 82 of the old lines were repetitive `sftp.put()` calls that are now one loop over `config_manifest.json`; what replaced them is structure, real error handling and comments explaining the why. It went from a flat run of top-level statements to seven dispatched milestones.
 
-## `prog_dev.py` — **Complex** (941 lines)
+## `teltonika.py` — **Complex** (611 lines, seven milestones)
 
-The GUI-facing orchestration layer, `exec()`-loaded by `pages/program_page.py`. Defines its own copies of several utilities that also exist (in more complete form) in `resources/utilities/` — this file does not import from that package at all.
+Runs as a subprocess with `(gate_ip, netmask, gateway, temp_pass)` as `sys.argv`. Configuration is `load_config(DEVICE_DIR, env_prefix="TR_")` (`:55`); transport is `SSHSession`; every wait is completion-driven.
 
-- `is_valid_ip` (`:85`) and `validate_subnet` (`:92`) are near-identical duplicates of `resources/utilities/network_utils.is_valid_ip` and the *tested-but-not-yet-implemented* `validate_subnet` that `tests/test_network_utils.py` expects — this file's copy is a working reference implementation for what that shared function should look like.
-- `lookup_excel(sheet, gate, device)` (`:118`): scans every cell for one matching `gate`, then reads the three cells immediately to its left as IP/netmask/gateway (a **positional**, not header-based, lookup — fragile to column reordering). Sets globals `gate_ip`/`gate_netmask`/`gate_gateway`/`valid_ip` rather than returning values. This is a 3-argument version distinct from `resources/utilities/excel_utils.lookup_excel(sheet, gate)`'s 2-argument, tuple-returning version.
-- `run_main_script(airport, gate, temp_pass, device)` (`:160`): looks up gate networking info, spawns `teltonika.py` as a subprocess, streams its stdout once (`:193-194`), calls `run_test_script` (`:201`), then attempts a **second** read of `process.stdout` (`:204-205`) to drive crash-log/MAC/label logic. Because the first loop already consumed the pipe to EOF, this second loop's body (`:206-569` — crash log writing, MAC-address Excel update, label file generation, timestamp coloring) is unlikely to execute on a normal run; see the caveat in `WORKFLOW.md` §4. If labels or MAC values ever come up missing/empty in the Excel log after what otherwise looks like a clean run, this is the first place to check.
-- `run_test_script(device_path, device, airport, excel, gate)` (`:571`): defines its **own** nested `ssh_bbb_connect`/`ssh_bbb_run`/`ssh_run_shell` (shadowing the module-level ones, `:573-624`) to run the Modbus toggle test. `ssh_run_shell(client, command)` (`:597`) sends a command into an interactive shell and specifically watches for a `"[sudo] password for"` prompt to auto-supply the BBB password (`:617-621`) — this is how it adds a temporary static IP to the BBB's `eth0` before running the test. Writes its own crash log (`test_crash_log_*.txt`) and updates Excel columns 12–14 (test timestamp, test crash-log hyperlink, test count) independently of `run_main_script`'s columns 7–11.
-- Column numbers throughout (`sheet.cell(row=t_row, column=7)` for MAC, `column=8` for timestamp, `column=9` for label, `column=10` for crash log, `column=11` for programmed-count, `12`–`14` for the test-phase equivalents) are **hardcoded integers**, matching the specific column order of the real airport `.xlsx` templates (`REAL_HEADERS` in `tests/test_prog_dev_integration.py:19-23` documents this exact order) — reordering columns in a spreadsheet template would silently write to the wrong cells.
+### Structure
+
+`STEPS` (`:571`) dispatches seven functions from `main()`, mirroring `digix20.py`:
+
+| Step id | Function | What it does |
+| --- | --- | --- |
+| `check_ip` | `check_state` (`:188`) | Reads the BBB's `eth0`. A 10.x.y.123 lease that isn't the template address means this gate is already done. |
+| `staging` | `stage_files` (`:219`) | Refreshes `configs/` and `testfile/` from the `og_` originals, points both at this gate, uploads the test script to the BBB. |
+| `firmware` | `install_firmware` (`:272`) | SFTPs the firmware, verifies size, runs `sysupgrade`, waits for the router to go down. |
+| `reboot_1` | `verify_firmware` (`:340`) | Waits for it back, then confirms the running version. |
+| `config_push` | `push_configs` (`:441`) | Pushes the 82 manifest files to `/etc/config/`, stat-verifying each. |
+| `identity` | `read_identity` (`:481`) | Reads the MAC via `mac_utils.extract_mac`. |
+| `reboot_2` | `final_reboot` (`:518`) | Reboots so the config takes effect, waits for it back. |
+
+`main()` (`:582`) catches `StepError`, emits `FAIL` for the step that was in flight, and returns a non-zero exit code. `AlreadyProgrammed` (`:69`) is caught separately and returns **0** — a gate that was already done is not a failure, which preserves the old `sys.exit(0)`.
+
+### What changed, and why each mattered
+
+- **Connections.** Every operation used to open its own `paramiko.SSHClient`, and shells opened with `invoke_shell()` were never closed. Now one pooled `SSHSession` per phase, with `ManagedShell` for interactive work.
+- **`router_session()` (`:151`) replaces `ssh_router_connect(num, admin_num)`.** The old function's nested bare `except:` meant that when *both* connection attempts failed it printed "Errors in Authentication" and returned a client that had never connected — every following step then failed obscurely. `connect_with_fallback` tries the candidate list from `router_candidates()` (`:123`) and raises if none work. The candidate list is also wider: factory address and post-config address, each with the scanned password and the configured one, so a rerun against a partly-configured router finds it.
+- **Waits.** Firmware install was a flat `time.sleep(75) + sleep(60) + sleep(60)`; the reboot was `sleep(30) + sleep(60)`. Both were worst-case padding. Now `wait_for_port(up=False)` confirms the box actually went down, then `wait_for_any_port` (`:394`) waits for it back. `wait_for_any_port` shares one deadline across the candidate addresses — the router can return on the factory or the configured address depending on how far the run got, and polling each with a full timeout would treble the failure path.
+- **Firmware verification.** The old check was `"07.22" in <login banner>`. Kept, but with a fallback to `cat /etc/version` (`:363`), so a build with a different greeting isn't failed for cosmetic reasons. The expected version is `CONFIG["firmware_version"]`, not a literal.
+- **The 82 config files** were 82 hardcoded `sftp.put()` lines. They are now `config_manifest.json`. **This is deliberately not "every file in `configs/`"** — see the manifest's own comment and `tests/test_tr_config_manifest.py`. Each file is now stat-verified after transfer; previously nothing checked that any of them arrived.
+- **MAC extraction** used a single `"eth0" ... "HWaddr"` string check that returned nothing whenever busybox changed format. Now `mac_utils.extract_mac(output, interface=...)`, with an `ip link` fallback. A missing MAC reports `SKIPPED`, not `FAIL` — the label field goes blank but the router is fine.
+- **A dead `shell.recv()` on a closed channel** sat between the old firmware install and its wait (`shell.close()` at old `:361`, `shell.recv(4096)` at old `:369`). Gone with the restructure.
+- **The "revert the network file" step is gone.** It rewrote `configs/network` back to the template address after each run. That was already redundant — the run *starts* by re-copying from `og_configs/` — and `refresh_working_copy` makes it provably so. `configs/network` now keeps the last gate's address, which is more useful when debugging.
+
+### Milestones
+
+The `status` aliases at `:57-62` emit the `##STATUS##` markers `prog_dev.py` forwards to the GUI. With `checklist.json` added, **TR now has the live Status panel** the Digi has had.
+
+## `prog_dev.py` — **Medium** (364 lines)
+
+Unchanged in substance since its own migration; see git history for the three bugs fixed there (the double read of `process.stdout`, testing after a failed program, and the leaked shell channel). Two changes came with the `teltonika.py` work:
+
+- `stage_test_script` (`:344`) now delegates to `templating.stage_template`, the same helper `teltonika.py` uses for `og_configs/`. Its hand-rolled copy-and-regex is gone.
+- It reports the `label` and `testing` milestones itself (`:238`, `:282`), because both happen in this process after the hardware script has exited.
+
+## `resources/utilities/templating.py` — **Simple** (shared, new)
+
+`refresh_working_copy(source, dest)` re-copies a template folder; `patch_file(path, old, new)` substitutes and **verifies by counting replacements**; `stage_template(...)` does both.
+
+The verification detail is the point. The old code checked `if new_ip in content` after the substitution — which is satisfied by a file that already contained that address from a previous run. A substitution that silently did nothing still looked like it worked, and the previous gate's configuration went onto this gate's router. Counting replacements catches that; `tests/test_templating.py` pins the behaviour. `patch_file` also matches the placeholder as a whole token, so replacing `10.28.18.2` cannot corrupt a `10.28.18.20` elsewhere in the file.
 
 ## `FloodLighToggle.py` — **Medium** (558 lines, third-party-derived)
 
-A Modbus/TCP client (attributed to Andy Cranston / Cranston Innovation in its header comment, `devices/TR/FloodLighToggle.py:3`) adapted as the post-programming functional test. `teltonika.py` and `prog_dev.py`'s `run_test_script` both patch this file's hardcoded target IP (`127.0.0.1` → the gate's real IP) before copying it to the BeagleBone Black and running it there via SSH (`ssh_bbb_run("python FloodLighToggle.py")`, `devices/TR/prog_dev.py:767`). Success is detected purely by string-matching `"Bytes in received"` in the BBB's command output (`devices/TR/prog_dev.py:771`) — there's no structured parsing of the Modbus response on the `prog_dev.py` side.
+A Modbus/TCP client (attributed to Andy Cranston / Cranston Innovation in its header, `:3`) adapted as the post-programming functional test. Both `teltonika.py` and `prog_dev.py` point its hardcoded `127.0.0.1` at the gate's real address before copying it to the BeagleBone. Success is detected by string-matching `"Bytes in received"` in the BBB's output — there is no structured parsing of the Modbus response.
 
 ## Non-code assets
 
-- `og_configs/` / `configs/` (94 files each, not 82 as `../TR_DEVICE_DOCUMENTATION.md` states — the template grew since that doc was last synced) — see `WORKFLOW.md` §3 for the copy/patch/revert lifecycle.
+- `config_manifest.json` — the 82 files pushed to `/etc/config/`, in order, extracted verbatim from the `sftp.put()` calls it replaced. The 12 files in `og_configs/` it omits (`certificates`, `log`, `speedtest`, and the `siteman_*` group) are per-unit device state that provisioning must leave alone.
+- `checklist.json` — the nine Status-panel rows. Seven come from `teltonika.py`; `label` and `testing` are reported by `prog_dev.py`.
+- `device_config.json` — **read by both files now.** Carries the BBB and router addresses, credentials, firmware filename and version, and every timeout. All overridable with `TR_*` environment variables.
+- `og_configs/` / `configs/` (94 files each) — see `WORKFLOW.md` §3. Never edit `og_configs/`.
 - `og_testfile/` / `testfile/` — same pattern, for `FloodLighToggle.py`.
-- `*.xlsx` (`GCN-PDX.xlsx`, `JKC-SLC.xlsx`, `IP_TEMPLATE.xlsx`, `oshkosh_log.xlsx`) — per-airport gate data; `oshkosh_log.xlsx` is explicitly excluded from the dropdown by `resources/utilities/excel_utils.get_excel_files` (`resources/utilities/excel_utils.py:11`), so it functions as a master log rather than a selectable airport.
-- `labels/`, `router_labels/` — `router_labels/` is where `prog_dev.py` writes new label `.txt` files (`devices/TR/prog_dev.py:273-278,510-511`); per `../READme.md`, a physical Brady label printer watches that folder and moves printed files into `labels/`.
-- `history/` — abandoned prior implementations (`dashboard.py`, `prog_dev_old.py`, `tel2.py`, `old_configs/`) kept for reference only.
-- `device_config.json` — matches the shape `resources/utilities/device_config.py` expects, but as noted in the root `WORKFLOW.md`, nothing in this folder currently reads it.
+- `*.xlsx` — per-airport gate data. `oshkosh_log.xlsx` is excluded from the dropdown and acts as a master log. **`JKC-SLC.xlsx` is corrupt** — not a valid `.xlsx`. It is skipped gracefully but needs replacing from a good copy.
+- `labels/`, `router_labels/` — `router_labels/` is where labels are written; a Brady printer watches it and moves printed files to `labels/`.
+- `history/` — abandoned prior implementations, reference only.

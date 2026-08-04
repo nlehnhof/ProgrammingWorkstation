@@ -1,5 +1,7 @@
 This folder contains all the files and code necessary to program the Teltonika RuTX08 router.
 
+For a walkthrough of how it all runs, see [`documentation/`](documentation/) in this folder.
+
 FOLDERS
 > Configs: The configuration files that set up and define the router settings. We change the network file to change the wifi ip address.
 > crash_logs: Holds the files for any errors or failures.
@@ -14,23 +16,33 @@ FILES
 > debugging.md: The file where I've recorded bugs, attempts, and the solution.
 > FloodLighToggle.py: the file used to test connection between the router and PLC/HMI. Pulled from open-source.
 > Excel files: Each excel file represents an airport. The airport should fill out the gates and gate information per the template. This data is then programmed to the router by updating the configs/testfile/etc..
-> prog_dev.py: possibly the most important file. This is the file that actually programs and tests the router.
-    > run_main_script: 
-        > Gets the data from the excel sheets.
-        > Sets up the crash logs
-        > Checks ip and subnet validity
-        > Runs teltonika.py to program the router and set up the BBB.
-        > Runs the test script
+> prog_dev.py: the file the application calls. It orchestrates a run; teltonika.py
+  is what actually touches the router. Rewritten in e96074a onto the shared
+  utilities in resources/utilities/, so the Excel, crash-log and label handling
+  it used to spell out by hand now lives in one place and is shared with the
+  Digi IX20.
+    > run_main_script:
+        > Reads the gate's IP/netmask/gateway from the airport sheet, looked up
+          by column NAME (not position), and refuses to continue if the sheet
+          data is unusable.
+        > Runs teltonika.py to program the router, watching its output in a
+          single pass for failures and the MAC address.
+        > On failure: writes a crash log, stamps the sheet with a red
+          timestamp, writes NO label, and stops.
+        > On success: writes the label, stamps the sheet in black, then runs
+          the test script.
     > run_test_script:
-        > gets router ip address as currently seen from the BBB.
-        > updates and copies the testfile over to the BBB
-        > Verifies that FloodLighToggle.py has the new ip address and is in the BBB.
-        > Sets up static ip of BBB to access the router
-        > Verifies static ip
-        > Runs the toggle test script (FloodLighToggle.py)
-        > Records errors and outputs to crash log
+        > Copies the testfile over to the BBB and points it at the new gate IP.
+        > Verifies FloodLighToggle.py arrived on the BBB.
+        > Gives the BBB a static ip on the gate subnet to access the router,
+          using the sheet's real netmask rather than assuming /24.
+        > Verifies that static ip.
+        > Runs the toggle test script (FloodLighToggle.py).
+        > Records every failure to a crash log and stamps the test columns.
 > RUTX_R_00.07.22.3_WEBUI.bin: the updated firmware file that is downloaded to the router.
-> teltonika.py: the file that actually runs the programming of the router. 
+> teltonika.py: the file that actually runs the programming of the router.
+  NOT yet migrated to the shared utilities -- it still holds its own SSH code,
+  fixed waits, and hardcoded addresses/passwords. See documentation/CODE_EXPLAIN.md.
     > Holds the logic for connecting to the BBB and Router. 
     > Performs all the tasks required for updating the configs/network file and testfile with the new ip address. 
     > Copies the configs and firmware to the router. Updates the router.

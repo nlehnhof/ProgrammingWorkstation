@@ -1,12 +1,10 @@
-# add_device_page.py
-import os
-import sys
-from PyQt5.QtWidgets import QMainWindow, QFrame, QListWidget, QStackedWidget, QApplication, QWidget, QLabel, QLineEdit, QPushButton, QTextEdit, QVBoxLayout, QHBoxLayout, QMessageBox, QComboBox
+# connection_page.py
+from PyQt5.QtWidgets import QMainWindow, QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QShowEvent, QPixmap
-from device_types import *
-from devices import *
-from resources.utilities.fonts import header_font, subtitle_font
+from PyQt5.QtGui import QPixmap
+
+from resources.utilities.app_paths import resource_path
+from resources.utilities.fonts import header_font
 
 class ConnectionPage(QMainWindow):
     def __init__(self, stacked_widget):
@@ -35,7 +33,7 @@ class ConnectionPage(QMainWindow):
         # Create QLabel and load image
         image = QLabel()
         try:
-            pixmap = QPixmap("resources/images/router.jpg")  # Replace with your image path
+            pixmap = QPixmap(resource_path("resources", "images", "router.jpg"))
             if pixmap.isNull():
                 raise FileNotFoundError("Image not found or invalid format.")
             image.setPixmap(pixmap.scaled(600, 400, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
