@@ -1,23 +1,16 @@
 # program_page.py
-from PyQt5.QtWidgets import QMainWindow, QCheckBox, QScrollArea, QListWidget, QSizePolicy, QApplication, QWidget, QLabel, QLineEdit, QPushButton, QTextEdit, QVBoxLayout, QHBoxLayout, QMessageBox, QComboBox
-# from device_types.ssh_device import SSHDevice
-from PyQt5.QtGui import QShowEvent
-# from device_types import *
-from core.manager import manager
-import sys
-from pathlib import Path
-from devices import *
 import os
-from resources.utilities.excel_utils import get_dropdown, lookup_excel, get_excel_files
-from PyQt5.QtCore import Qt, QThread, pyqtSignal
-import importlib.util
-import json
+import sys
 import traceback
-from resources.utilities.fonts import header_font, subtitle_font
-from resources.utilities.app_paths import app_root, device_dir
-from pages.status_panel import StatusPanel, load_checklist
 
-current_dir = Path(__file__).parent
+from PyQt5.QtWidgets import QMainWindow, QCheckBox, QScrollArea, QListWidget, QSizePolicy, QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout, QHBoxLayout, QMessageBox, QComboBox
+from PyQt5.QtCore import Qt, QThread, pyqtSignal
+
+from core.manager import manager
+from pages.status_panel import StatusPanel, load_checklist
+from resources.utilities.app_paths import device_dir
+from resources.utilities.excel_utils import get_dropdown, get_excel_files
+from resources.utilities.fonts import header_font, subtitle_font
 
 
 class ProgramWorker(QThread):
@@ -75,7 +68,6 @@ class ProgramPage(QMainWindow):
         central_widget = QWidget()
         central_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.setCentralWidget(central_widget)
-        print("Registred Devices: ", registered_devices)
 
         # Layouts
         outer_layout = QVBoxLayout(central_widget)
@@ -105,7 +97,7 @@ class ProgramPage(QMainWindow):
 
         # Drop Downs
         self.device_chosen = QComboBox()
-        self.device_chosen.addItems(registered_devices)
+        self.device_chosen.addItems(manager.names())
         self.device_chosen.setFixedWidth(150)
         self.airport = QComboBox()
         self.airport.addItem("No data")
@@ -319,38 +311,23 @@ class ProgramPage(QMainWindow):
             self.gate.addItems(gate_options)
 
     def showEvent(self, a0):
-            """Refresh list every time the page is shown."""
-            self.devices_list.clear()  # Clear the widget
-            self.devices_list.addItems(registered_devices)  # Load from global list
-            self.refresh()
-            super().showEvent(a0)
+        """Re-read the registry every time the page is shown."""
+        self.refresh()
+        super().showEvent(a0)
 
     def refresh(self):
-        """Load devices from JSON and update both widgets."""
-        try:
-            devices_json = os.path.join(app_root(), "core", "devices.json")
-            with open(devices_json, "r", encoding="utf-8") as f:
-                data = json.load(f)
+        """Re-read the device registry and update the widgets that list it."""
+        names = manager.names()
 
-            # Get all top-level keys from JSON
-            keys = list(data.keys())
+        self.devices_list.clear()
+        self.devices_list.addItems(names)
 
-            # Update QListWidget
-            self.devices_list.clear()
-            self.devices_list.addItems(keys)
+        self.device_chosen.clear()
+        self.device_chosen.addItems(names)
 
-            # Update QComboBox
-            self.device_chosen.clear()
-            self.device_chosen.addItems(keys)
-
-            # Keep the checklist matched to whatever device is now selected.
-            if hasattr(self, "status_panel"):
-                self.load_checklist(self.device_chosen.currentText().strip())
-
-        except FileNotFoundError:
-            print("Error: devices.json not found.")
-        except json.JSONDecodeError:
-            print("Error: devices.json is not valid JSON.")
+        # Keep the checklist matched to whatever device is now selected.
+        if hasattr(self, "status_panel"):
+            self.load_checklist(self.device_chosen.currentText().strip())
 
     def on_submit(self):
         user_text=self.router.text().strip()

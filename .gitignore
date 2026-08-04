@@ -1,3 +1,16 @@
 # PyInstaller output
 dist/
 build/
+
+# Python
+__pycache__/
+*.py[cod]
+venv/
+.pytest_cache/
+
+# Written by the app at runtime, per run -- not source.
+# See resources/utilities/reporting.py and pages/error_log_page.py.
+logs/
+crash_logs/
+router_labels/
+*.bak

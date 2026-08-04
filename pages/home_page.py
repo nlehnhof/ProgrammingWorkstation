@@ -1,12 +1,14 @@
-# add_device_page.py
-import os
-import sys
-from PyQt5.QtWidgets import QMainWindow, QFrame, QListWidget, QStackedWidget, QApplication, QWidget, QLabel, QLineEdit, QPushButton, QTextEdit, QVBoxLayout, QHBoxLayout, QMessageBox, QComboBox
+# home_page.py
+"""The landing page: pick "Add Device" or "Program Device"."""
+
+from PyQt5.QtWidgets import QMainWindow, QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QShowEvent
-from device_types import *
-from devices import *
-from resources.utilities.fonts import header_font, subtitle_font
+
+from resources.utilities.fonts import header_font
+
+ADD_DEVICE_PAGE = 1
+PROGRAM_PAGE = 2
+
 
 class HomePage(QMainWindow):
     def __init__(self, stacked_widget):
@@ -17,40 +19,39 @@ class HomePage(QMainWindow):
     def __init_ui(self):
         self.setWindowTitle("Programming Workstation")
         central_widget = QWidget()
-        self.setCentralWidget(central_widget)
 
-        # Layouts
         layout = QVBoxLayout()
-        bottom_layout = QHBoxLayout()
-        bottom_layout.setSpacing(20)
+        buttons = QHBoxLayout()
+        buttons.setSpacing(20)
 
-        # Widgets
         welcome = QLabel("Welcome to the Programming Workstation")
         welcome.setAlignment(Qt.AlignmentFlag.AlignCenter)
         welcome.setFont(header_font)
+
         self.add_button = QPushButton("Add Device")
+        self.add_button.clicked.connect(
+            lambda: self.stacked_widget.setCurrentIndex(ADD_DEVICE_PAGE)
+        )
         self.program_button = QPushButton("Program Device")
-        self.add_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(1))
-        self.program_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(2))
-        self.devices_list = QListWidget()
-        self.stacked_widget.currentChanged.connect(self.on_page_changed)
+        self.program_button.clicked.connect(
+            lambda: self.stacked_widget.setCurrentIndex(PROGRAM_PAGE)
+        )
 
         layout.addWidget(welcome)
-        bottom_layout.addWidget(self.add_button)
-        bottom_layout.addWidget(self.program_button)
-
-        layout.addLayout(bottom_layout)
+        buttons.addWidget(self.add_button)
+        buttons.addWidget(self.program_button)
+        layout.addLayout(buttons)
 
         central_widget.setLayout(layout)
         self.setCentralWidget(central_widget)
 
-    def showEvent(self, a0):
-            """Refresh list every time the page is shown."""
-            self.devices_list.clear()
-            self.devices_list.addItems(registered_devices)
-            super().showEvent(a0)
-    
+        # Every page gets a chance to re-read the registry as it comes into
+        # view, so a device added on one page shows up on the others without
+        # restarting the app.
+        self.stacked_widget.currentChanged.connect(self.on_page_changed)
+
     def on_page_changed(self, index):
-        page = self.stacked_widget.widget(index)  # Get the QWidget for this page
-        if hasattr(page, "refresh") and callable(page.refresh):
-            page.refresh()
+        page = self.stacked_widget.widget(index)
+        refresh = getattr(page, "refresh", None)
+        if callable(refresh):
+            refresh()

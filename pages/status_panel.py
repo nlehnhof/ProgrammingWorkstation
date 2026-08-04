@@ -33,6 +33,7 @@ ICON_RUNNING = "→"   # arrow
 ICON_PASS = "✔"      # check
 ICON_FAIL = "✖"      # cross
 ICON_WAIT = "○"
+ICON_SKIPPED = "–"   # dash
 
 # state -> (icon, icon colour, default status text, status colour)
 STATES = {
@@ -42,6 +43,9 @@ STATES = {
     "SENT": (ICON_RUNNING, GREEN, "SENT", GREEN),
     "WAIT": (ICON_WAIT, GREY, "", GREY),
     "FAIL": (ICON_FAIL, RED, "FAIL", RED),
+    # Deliberately not done. Grey rather than green or red: nothing failed
+    # here, but nothing was produced either.
+    "SKIPPED": (ICON_SKIPPED, GREY, "SKIPPED", GREY),
 }
 
 
@@ -263,7 +267,7 @@ class StatusPanel(QWidget):
             self.scroll.ensureWidgetVisible(row)
             return
 
-        if state in ("PASS", "FAIL"):
+        if state in ("PASS", "FAIL", "SKIPPED"):
             if self._running_id == step_id:
                 self._timer.stop()
                 self._running_id = None

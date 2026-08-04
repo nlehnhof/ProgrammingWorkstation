@@ -26,6 +26,8 @@
     "scp_timeout": 900,
     "firmware_update_timeout": 900,
     "config_restore_timeout": 900,
+    "restore_ack_timeout": 120,
     "reboot_timeout": 420,
+    "firmware_boot_timeout": 900,
     "cli_timeout": 60
 }

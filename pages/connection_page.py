@@ -1,13 +1,10 @@
-# add_device_page.py
-import os
-import sys
-from PyQt5.QtWidgets import QMainWindow, QFrame, QListWidget, QStackedWidget, QApplication, QWidget, QLabel, QLineEdit, QPushButton, QTextEdit, QVBoxLayout, QHBoxLayout, QMessageBox, QComboBox
+# connection_page.py
+from PyQt5.QtWidgets import QMainWindow, QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QShowEvent, QPixmap
-from device_types import *
-from devices import *
+from PyQt5.QtGui import QPixmap
+
 from resources.utilities.app_paths import resource_path
-from resources.utilities.fonts import header_font, subtitle_font
+from resources.utilities.fonts import header_font
 
 class ConnectionPage(QMainWindow):
     def __init__(self, stacked_widget):

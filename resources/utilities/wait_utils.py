@@ -19,9 +19,34 @@ import time
 from resources.utilities.ssh_session import SSHSession, SSHCommandTimeout
 
 # Digi Admin CLI prompts:  "admin@IX20-1234>"  /  "(config)>"  /  a bare ">"
-DIGI_PROMPT = r"(?:^|\n)[^\r\n]*(?:>|#|\$)[ \t]*$"
+#
+# Anchored at the end of everything received so far (\Z), because the prompt is
+# by definition the last thing the device sends before it waits for input. An
+# unanchored ">" would match a stray angle bracket anywhere in a command's
+# output -- during the 36 MB firmware scp that means "the prompt came back"
+# fires while the transfer is still running, and the verification that follows
+# races the copy. The prompt arriving split across recv() chunks is fine: the
+# buffer accumulates and the next chunk re-tests it.
+#
+# Trailing run is \s* rather than [ \t]*: the CLI ends the prompt with a bare
+# ">" but may follow it with CR/LF for cursor positioning, and requiring only
+# spaces/tabs made a prompt that was genuinely there fail to match.
+DIGI_PROMPT = r"[>#\$]\s*\Z"
 
 DEFAULT_POLL_INTERVAL = 2
+
+# The Admin CLI is a full-screen-ish terminal app: it wraps its prompt in
+# cursor control, e.g. "\x1b[0K>\x1b[2C" -- erase to end of line, the caret,
+# then cursor-forward-2. Matching raw bytes means the prompt pattern sees
+# "\x1b[2C" after the ">" instead of end-of-buffer and never fires. Strip the
+# escapes before matching (and before returning, so callers parsing command
+# output get clean text too).
+ANSI_ESCAPE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]|\x1b[@-Z\\-_]")
+
+
+def strip_ansi(text):
+    """Remove ANSI/VT escape sequences from terminal output."""
+    return ANSI_ESCAPE.sub("", text)
 
 
 class StepTimeout(TimeoutError):
@@ -30,6 +55,27 @@ class StepTimeout(TimeoutError):
 
 class RemoteFileMissing(RuntimeError):
     """Raised when a file we just transferred is absent or the wrong size."""
+
+
+class ShellClosed(RuntimeError):
+    """The device closed the shell before the expected marker arrived.
+
+    Usually means it rebooted. For a command that reboots on purpose (a config
+    restore, a firmware bank switch) this is the success signal and the caller
+    should catch it; anywhere else it is a real failure -- and either way it
+    beats waiting out a 15-minute timeout on a socket nobody is holding.
+    """
+
+
+def _shell_closed(shell):
+    """Best-effort EOF check; shells without an eof() are assumed open."""
+    checker = getattr(shell, "eof", None)
+    if not callable(checker):
+        return False
+    try:
+        return bool(checker())
+    except Exception:
+        return False
 
 
 def read_until(shell, patterns, timeout, echo=True, poll=0.2):
@@ -49,7 +95,9 @@ def read_until(shell, patterns, timeout, echo=True, poll=0.2):
     compiled = [re.compile(p, re.MULTILINE) for p in patterns]
 
     deadline = time.monotonic() + timeout
+    raw = ""
     buffer = ""
+    echoed = 0
 
     while True:
         try:
@@ -59,9 +107,15 @@ def read_until(shell, patterns, timeout, echo=True, poll=0.2):
 
         if chunk:
             text = chunk.decode(errors="replace") if isinstance(chunk, bytes) else chunk
-            buffer += text
+            # Strip over the whole accumulation, not per chunk: an escape
+            # sequence split across two recv() calls would survive otherwise.
+            raw += text
+            buffer = strip_ansi(raw)
             if echo:
-                print(text, end="", flush=True)
+                new = buffer[echoed:]
+                if new:
+                    print(new, end="", flush=True)
+                echoed = len(buffer)
 
             for pattern in compiled:
                 if pattern.search(buffer):
@@ -69,6 +123,11 @@ def read_until(shell, patterns, timeout, echo=True, poll=0.2):
                         print(flush=True)
                     return buffer
         else:
+            if _shell_closed(shell):
+                raise ShellClosed(
+                    "Device closed the shell before "
+                    f"{[p.pattern for p in compiled]} arrived"
+                )
             if time.monotonic() >= deadline:
                 break
             time.sleep(poll)

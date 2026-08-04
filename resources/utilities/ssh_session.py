@@ -13,6 +13,7 @@ import socket
 import paramiko
 
 DEFAULT_TIMEOUT = 30
+DEFAULT_KEEPALIVE = 15
 
 
 class SSHCommandTimeout(TimeoutError):
@@ -38,6 +39,17 @@ class ManagedShell:
         except socket.timeout as exc:
             raise SSHCommandTimeout("Timed out waiting for shell output") from exc
 
+    def eof(self):
+        """True once the far end is gone -- e.g. the device rebooted.
+
+        Without this a reader cannot tell "the peer hung up" from "nothing has
+        arrived yet", and waits out its full timeout on a dead channel.
+        """
+        if self._closed or self._channel.closed or self._channel.eof_received:
+            return True
+        transport = self._channel.get_transport()
+        return transport is None or not transport.is_active()
+
     def close(self):
         if not self._closed:
             self._channel.close()
@@ -62,12 +74,14 @@ class SSHSession:
                 shell.recv(1000)
     """
 
-    def __init__(self, host, username, password, port=22, timeout=DEFAULT_TIMEOUT):
+    def __init__(self, host, username, password, port=22, timeout=DEFAULT_TIMEOUT,
+                 keepalive=DEFAULT_KEEPALIVE):
         self.host = host
         self.username = username
         self.password = password
         self.port = port
         self.timeout = timeout
+        self.keepalive = keepalive
         self._client = None
         self._sftp = None
 
@@ -87,6 +101,13 @@ class SSHSession:
                 password=self.password,
                 timeout=self.timeout,
             )
+            # An embedded device that reboots mid-command just stops answering
+            # -- no FIN, no channel EOF -- so the socket sits in ESTABLISHED and
+            # a reader waits out its whole timeout on a peer that is gone.
+            # Keepalives make the transport notice and go inactive.
+            transport = client.get_transport()
+            if transport is not None and self.keepalive:
+                transport.set_keepalive(self.keepalive)
             self._client = client
         return self._client
 

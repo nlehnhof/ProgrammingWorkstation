@@ -1,15 +1,12 @@
-"""Registry of available device folders.
+"""Per-device folders -- one directory per device type the app can program.
 
-Scans `app_root()/devices` at import time rather than this package's own
-directory, so a built exe reads the device folder sitting beside it. That is
-what lets a new device be added by dropping in a folder -- no rebuild.
+Each subfolder holds everything that device needs: `prog_dev.py` (the entry
+point the app calls), its hardware script, `device_config.json`, `checklist.json`,
+`instructions.txt` and the airport spreadsheets.
+
+Nothing is imported from here. Device folders are discovered on disk at the
+moment they are needed -- see `resources.utilities.app_paths.registered_devices`
+and `core.manager.DeviceManager.names`. Scanning lazily rather than at import
+time is what lets a device be added to a running, packaged build by dropping a
+folder next to the .exe.
 """
-
-from resources.utilities.app_paths import registered_devices as _scan
-
-registered_devices = _scan()
-
-__all__ = ["registered_devices"]
-
-# Print results
-print("Registered Devices:", registered_devices)
