@@ -3,10 +3,31 @@
 **Device Type:** Teltonika RUTX08 Router  
 **Firmware Version:** 0.7.22.3  
 **Implementation Location:** `devices/TR/`  
-**Status:** Production-ready with active stability improvements  
-**Last Updated:** 2026-07-23
+**Status:** In production; orchestration layer migrated, hardware script not yet  
+**Last Updated:** 2026-08-04 (`e96074a`)
 
-⚠️ **WARNING:** Configuration and environment variable handling are still rough and in progress. Test thoroughly in non-production environments before deploying to production hardware.
+> ### Read this first — what this document is
+>
+> This is the long-form reference for the TR device: hardware profile, the
+> provisioning steps, file layout, and the **target** architecture. For what the
+> code does *today*, see [`documentation/`](documentation/) in this folder,
+> which is kept in sync with each commit.
+>
+> As of `e96074a` the two halves of this device are at different stages:
+>
+> * **`prog_dev.py` has been migrated** onto the shared utility layer and now
+>   matches what this document describes — layered config (`device_config.json`
+>   plus `TR_*` environment variables), pooled `SSHSession`, header-based Excel
+>   access, and shared crash-log/label/sheet reporting. It went from 943 to 361
+>   lines.
+> * **`teltonika.py` has not been migrated.** It still uses raw `paramiko`,
+>   fixed `time.sleep()` waits, hardcoded addresses and passwords, and a
+>   single-format MAC parser. Where this document describes those subsystems,
+>   treat it as design intent for that file rather than a description of it.
+>
+> ⚠️ Because of that split, a `TR_*` environment variable affects the
+> orchestration and functional-test layers but **not** the values used inside
+> `teltonika.py`. See `documentation/INSTRUCTIONS.md`.
 
 ---
 
@@ -123,7 +144,7 @@ devices/TR/
 ├── READme.md                       # Basic device guide
 ├── RUTX_R_00.07.22.3_WEBUI.bin   # Firmware binary (30 MB)
 │
-├── og_configs/                     # Original config template (82 files - never modified)
+├── og_configs/                     # Original config template (94 files - never modified)
 │   ├── network                     # Network interface config
 │   ├── system                      # System settings
 │   ├── firewall                    # Iptables rules
@@ -511,7 +532,7 @@ python prog_dev.py
 **Software:**
 - Python dependencies installed
 - Firmware file in folder: `RUTX_R_00.07.22.3_WEBUI.bin`
-- Configuration files: `og_configs/` (82 files)
+- Configuration files: `og_configs/` (94 files)
 - Test file: `og_testfile/FloodLighToggle.py`
 
 ### Deployment

@@ -72,10 +72,12 @@ test with `ModuleNotFoundError: No module named 'resources'`.
 .\venv\Scripts\python.exe -m pytest tests/
 ```
 
-Expect **6 pre-existing failures** in `tests/test_prog_dev_integration.py` and
-**2 collection errors** (`test_excel_utils.py`, `test_network_utils.py`). These
-are known and unrelated to setup — they test helpers that were never written.
-Everything else should pass.
+**All 66 tests should pass.** A failure here means something is genuinely wrong
+with the environment or the code — there are no known-bad tests to ignore.
+
+(Older notes described 6 failures and 2 collection errors. Those tests were
+written against a shared utility layer that had not been implemented yet;
+`e96074a` implemented it, and they pass.)
 
 ---
 

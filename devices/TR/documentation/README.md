@@ -1,6 +1,6 @@
 # Teltonika RUTX08 (TR) Device — Documentation
 
-**Version:** 1.0 · **Branch:** `sparse` · **Last commit:** `2e84f6c` — "DOCS.md file" (2026-07-30)
+**Version:** 2.0 · **Branch:** `docs-and-simplify` · **Last commit:** `e96074a` — "Simplify onto a shared utility layer; delete dead abstractions" (2026-08-04)
 
 *Doc style: formal structure, easy-to-read explanations, Mermaid diagrams, `file:line` citations only — same preferences recorded in `../../../documentation/README.md`.*
 
@@ -8,7 +8,14 @@
 
 This folder documents `devices/TR/` in isolation: the Teltonika RUTX08 router provisioning implementation, which is substantial and self-contained enough to warrant its own documentation set separate from the rest of the app (see `../../../documentation/` for the app shell around it).
 
-**Read this first if you're debugging a TR provisioning run**, since it explains the actual current behavior of `teltonika.py` and `prog_dev.py` — which is meaningfully different from what `../TR_DEVICE_DOCUMENTATION.md` (the pre-existing, more aspirational doc in this folder) describes. That file documents a planned refactor onto `resources/utilities/` (pooled SSH, header-based Excel, layered config); the scripts in this folder still use the original, self-contained implementation. This documentation set describes what's actually running.
+**Read this first if you're debugging a TR provisioning run.** It describes what actually runs today.
+
+The two files here are at different stages, and the difference matters constantly:
+
+- **`prog_dev.py` was migrated in `e96074a`** onto the shared utility layer — header-based Excel access, pooled `SSHSession`, `device_config.json` (so `TR_*` environment variables now work), and the shared crash-log/label/sheet-stamping module. It went from 943 to 361 lines, and three real bugs went with it.
+- **`teltonika.py` has not been migrated.** It still opens a raw `paramiko.SSHClient` per connection, waits on fixed `time.sleep()` calls, hardcodes its addresses and passwords, and parses MACs with a single-format check.
+
+`CODE_EXPLAIN.md` covers both and ends with a suggested migration order for `teltonika.py`; `devices/digiIX20/digix20.py` is the worked example.
 
 ## Files in this folder
 
@@ -17,7 +24,7 @@ Keywords: subprocess, SSH, sysupgrade, Excel logging, label generation, crash lo
 Questions answered:
 1. What are the 9 steps `teltonika.py` actually performs, in order?
 2. How does `prog_dev.py` decide whether a run succeeded or failed?
-3. What gets written back to the airport Excel file, and in which columns?
+3. What gets written back to the airport Excel file, and how is the cell chosen?
 4. What's the relationship between `og_configs/`/`configs/` and `og_testfile/`/`testfile/`?
 5. How does the router's IP get reverted after a successful run?
 
@@ -28,7 +35,7 @@ Questions answered:
 2. What does `prog_dev.py`'s `run_main_script` vs. `run_test_script` each handle?
 3. How is the router's MAC address extracted, and how reliable is it?
 4. What does the Modbus toggle test actually verify?
-5. Where do the hardcoded IPs/passwords live, and what are they?
+5. Which hardcoded IPs/passwords remain, and where?
 
 **INSTRUCTIONS.md** : Operator + developer instructions specific to running a TR provisioning cycle.
 Keywords: firmware, BeagleBone Black, wiring, gate IP, subnet.
@@ -41,6 +48,6 @@ Questions answered:
 
 ## Related documentation
 
-- `../TR_DEVICE_DOCUMENTATION.md` — the pre-existing doc describing the target/refactored architecture (config precedence, `SSHSession`, `mac_utils`). Useful for design intent, not accurate for current runtime behavior.
+- `../TR_DEVICE_DOCUMENTATION.md` — the older, longer reference for this device. It describes the target architecture (config precedence, `SSHSession`, `mac_utils`), which `prog_dev.py` has now reached and `teltonika.py` has not. Useful for design intent and for the hardware/wiring background.
 - `../debugging.md` — a running incident log the previous developer kept by hand; still useful for recognizing recurring failure signatures.
 - `../../../documentation/` — the app-wide documentation folder (pages, `core/manager.py`, shared utilities).
