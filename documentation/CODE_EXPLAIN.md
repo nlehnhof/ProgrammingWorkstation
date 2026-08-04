@@ -4,7 +4,7 @@
 
 Function-level explanation of every source file in the app, grouped by directory. The Teltonika device implementation (`devices/TR/`) has its own nested `documentation/CODE_EXPLAIN.md`; the Digi IX20 implementation (`devices/digiIX20/`) is covered at the end of this file.
 
-Complexity ratings default to **simple**; only genuinely intricate files are rated higher.
+Complexity ratings default to **simple** per `../resources/documentation/DOCS.md` ("error on the side of simple"); only genuinely intricate files are rated higher.
 
 ## New and changed in `e96074a`
 

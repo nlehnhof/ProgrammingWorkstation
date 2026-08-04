@@ -12,6 +12,7 @@
 | Understand how the files fit together | [`documentation/WORKFLOW.md`](documentation/WORKFLOW.md) |
 | Understand what a specific file or function does | [`documentation/CODE_EXPLAIN.md`](documentation/CODE_EXPLAIN.md) |
 | Work on the Teltonika device specifically | [`devices/TR/documentation/`](devices/TR/documentation/) |
+| Write documentation in this repo | [`resources/documentation/DOCS.md`](resources/documentation/DOCS.md) |
 
 ## The one-paragraph version
 

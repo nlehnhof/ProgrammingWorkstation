@@ -13,8 +13,7 @@ Documentation, in order of usefulness:
 - `documentation/` — the maintained set: `README.md`, `WORKFLOW.md`, `CODE_EXPLAIN.md`, `INSTRUCTIONS.md`, `SETUP.md`, `CHEAT_SHEET.md`. Kept in sync with each commit; this is the source of truth.
 - `devices/TR/documentation/` — `README.md`, `WORKFLOW.md`, `CODE_EXPLAIN.md`, `INSTRUCTIONS.md`, scoped to the Teltonika device.
 - `DOCUMENTATION_OVERVIEW.md` — a signpost to the above; it used to be a second parallel description and is no longer.
-
-There is no documentation style guide in this repo — match the style of the surrounding docs.
+- `resources/documentation/DOCS.md` — this repo's conventions for *writing* documentation: what belongs in each of the five files, and the per-file rules (cite files/lines/functions, default to "simple" complexity, refresh on commit). Follow it if asked to add or update docs anywhere in the tree.
 
 ## Running the app and tests
 

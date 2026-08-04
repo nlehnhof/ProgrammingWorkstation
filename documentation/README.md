@@ -65,3 +65,4 @@ Questions answered:
 - `CHEAT_SHEET.md` — one-page, plain-language summary of what the app is and how it is built. Written for someone who is not going to read any code.
 - `SETUP.md` — first-time setup on a device that has never run this before: prerequisites, environment creation, UAC/administrator behaviour, building and staging the packaged .exe.
 - `../devices/TR/documentation/` — nested documentation folder for the Teltonika RUTX08 device implementation specifically.
+- `../resources/documentation/DOCS.md` — the documentation style guide this folder's rules are based on.
