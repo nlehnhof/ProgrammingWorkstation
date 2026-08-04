@@ -4,9 +4,13 @@
 
 This file explains how the application's files interact at a navigation and data-flow level. For function-by-function detail, see `CODE_EXPLAIN.md`. For a version of this with no code in it at all, see [`../cheat_sheet.md`](../cheat_sheet.md).
 
-## Recent changes (`e96074a`)
+## Recent changes
 
-- **Both devices now share one utility layer.** The TR/Digi split that ran through the previous revision of this file is gone — see §5, which no longer needs a "target vs. actual" section.
+**Latest — `teltonika.py` migrated.** TR's hardware script is now seven dispatched milestones on the shared layer, with pooled connections and completion-driven waits in place of fixed sleeps. TR ships a `checklist.json`, so it has the live Status panel too, and `og_*` template staging moved into `resources/utilities/templating.py`, shared with `prog_dev.py` (§5a).
+
+Earlier, in `e96074a`:
+
+- **Both devices now share one utility layer.** The TR/Digi split that ran through the previous revision of this file is gone — see §6, which no longer needs a "target vs. actual" section.
 - **The child-process output loop is shared and runs once.** `status.watch_process()` replaces a hand-written loop in each `prog_dev.py`; TR's ran twice over the same pipe and the second pass did nothing — see §4.
 - **End-of-run bookkeeping is one module**, `resources/utilities/reporting.py` — see §6.
 - **Spreadsheets are read by column name.** `excel_utils` resolves every column through the header row — see §5.
@@ -156,9 +160,10 @@ Two details that drove the design:
 | Device | Call site | Env prefix |
 | --- | --- | --- |
 | digiIX20 | `digix20.py:48` | `DIGIIX20_` |
-| TR | `devices/TR/prog_dev.py:160` | `TR_` |
+| TR — orchestration | `devices/TR/prog_dev.py:160` | `TR_` |
+| TR — hardware script | `devices/TR/teltonika.py:55` | `TR_` |
 
-TR reading its own `device_config.json` is new. The file had existed on disk since the config system was introduced, but nothing loaded it, so `TR_*` variables had no effect and the BBB address and password were hardcoded in three separate places in that file.
+Both TR call sites are new. `devices/TR/device_config.json` had existed on disk since the config system was introduced, but nothing loaded it, so `TR_*` variables had no effect and the addresses, credentials, firmware filename and every timeout were hardcoded in the scripts. They are all in the JSON now.
 
 **Reporting** — everything a run leaves behind — is `resources/utilities/reporting.py`:
 

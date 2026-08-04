@@ -1,7 +1,7 @@
 # Programming Workstation — Cheat Sheet
 
 *One page. Plain language. No code.*
-*Current as of `e96074a`, 2026-08-04.*
+*Current as of the teltonika.py migration, 2026-08-04.*
 
 ---
 
@@ -107,11 +107,11 @@ Each airport has a spreadsheet, one row per gate. The app reads the left-hand si
 | | **Digi IX20** | **Teltonika RUTX08** |
 | --- | --- | --- |
 | Folder | `devices/digiIX20/` | `devices/TR/` |
-| Live checklist on screen | Yes | No — console output only |
+| Live checklist on screen | Yes, 9 steps | Yes, 9 steps |
 | Resumes after a failure | Yes, picks up where it left off | No, needs a factory reset |
-| Built on the shared toolbox | Fully | The top half, yes. The part that talks to the router, not yet. |
+| Built on the shared toolbox | Fully | Fully |
 
-The Digi is the newer, fully-modernised one. The Teltonika works, but the piece of it that actually talks to the router (`teltonika.py`) is still the original code and is the main remaining cleanup job.
+Both are now built the same way. The one real difference left is recovery: if a Digi run fails half-way, the next run works out where the router got to and carries on from there. A Teltonika has to be factory-reset first.
 
 ---
 
@@ -121,11 +121,13 @@ The two routers had each grown their own private copy of the same housekeeping �
 
 | | Before | After |
 | --- | --- | --- |
-| Teltonika's control file | 943 lines | **361 lines** |
+| Teltonika's control file | 943 lines | **364 lines** |
 | Digi's control file | 353 lines | **104 lines** |
-| Automated checks passing | 44 (plus 6 failing, 2 broken) | **66, all passing** |
+| Automated checks passing | 44 (plus 6 failing, 2 broken) | **83, all passing** |
 
-It also fixed three real faults that had been hiding in the Teltonika code:
+The Teltonika's *router-facing* script was rewritten afterwards. Its length barely changed, but it went from one long run of instructions to seven named steps that report their own progress — which is why that router now shows the same live checklist the Digi does, and why its waits finish as soon as the router is ready instead of always taking the worst case.
+
+The cleanup also fixed three real faults that had been hiding in the Teltonika code:
 
 1. **Every run reported success — even the failures.** The program read the router's progress report twice, but reading it the first time used it up. All the fault-detection was in the second read, looking at nothing. So nothing was ever detected.
 2. **A router that failed to set up was then tested anyway**, producing a second, more confusing failure on top of the first.
@@ -143,7 +145,7 @@ And it deleted a folder called `device_types/` — four files that had been enti
 | The app popped up an error window | The full text is also saved in `logs/` |
 | The Gate dropdown is empty | That spreadsheet is missing its heading row, or the file is damaged |
 | The "Program Device" button won't light up | Tick all the cabling checkboxes first — they're the gate |
-| A `TR_...` setting seems half-ignored | Known: it reaches the Teltonika's outer layer but not `teltonika.py` yet |
+| A Teltonika run ends in seconds, all grey | That gate was already programmed — not an error, nothing to do |
 
 ---
 

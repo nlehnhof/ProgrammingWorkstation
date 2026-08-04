@@ -25,7 +25,7 @@ Use `venv/` (Python 3.13) for everything — it has PyQt5, paramiko, openpyxl, p
 ./venv/Scripts/python.exe -m pytest tests/test_ssh_session.py::test_connects_lazily_on_first_use
 ```
 
-Run tests from the **repo root** with `-m pytest` (not the bare `pytest` executable) so `resources`/`devices`/`core` resolve as top-level packages — there's no `conftest.py` or `pyproject.toml` adding the rootdir to `sys.path`. All 66 tests should pass; a failure is a real regression, not pre-existing noise.
+Run tests from the **repo root** with `-m pytest` (not the bare `pytest` executable) so `resources`/`devices`/`core` resolve as top-level packages — there's no `conftest.py` or `pyproject.toml` adding the rootdir to `sys.path`. All 83 tests should pass; a failure is a real regression, not pre-existing noise.
 
 There is no linter/formatter config in this repo (no `.flake8`, `pyproject.toml`, `.pre-commit-config.yaml`) — don't invent style-check commands.
 
@@ -54,20 +54,25 @@ This is the reusable, tested layer. **Both devices' `prog_dev.py` are built on i
 - `status.py` — the `##STATUS##<id>|<state>|<detail>` protocol *and* `watch_process(command, report)`, the single-pass loop that runs a hardware script and consumes its output. Emitting and parsing live together on purpose.
 - `ssh_session.py` — `SSHSession` (pooled, lazy-connect, timeout-enforced) and `ManagedShell` (context manager, always closes). Reuse a session across commands rather than opening new connections.
 - `wait_utils.py` — waits driven by an observed event (a prompt returning, an exit status, a port answering), never a fixed sleep.
-- `device_config.py` — three-tier precedence: `DEFAULTS` → `device_config.json` → `{PREFIX}_*` env vars. Called with `env_prefix="DIGIIX20_"` from `digix20.py:48` and `env_prefix="TR_"` from `devices/TR/prog_dev.py:160`.
+- `device_config.py` — three-tier precedence: `DEFAULTS` → `device_config.json` → `{PREFIX}_*` env vars. Called with `env_prefix="DIGIIX20_"` from `digix20.py:48`, and `env_prefix="TR_"` from both `devices/TR/prog_dev.py:160` and `devices/TR/teltonika.py:55`.
 - `network_utils.py` — `is_valid_ip`, `validate_subnet`, `prefix_length`. Never assume `/24`; real sheets contain `255.255.255.128` gates.
+- `templating.py` — the `og_*` → working-copy staging both devices use. `patch_file` verifies by **counting replacements**, not by checking the new value is present afterwards; the latter passes on a file that already held that value, which is how a silently-failed substitution used to ship the previous gate's config.
 - `mac_utils.py` — `extract_mac()` handles several `ifconfig`/`ip link` formats; returns `None` rather than raising.
 - `app_paths.py` — where things are, from source and inside a packaged .exe. `script_command()` matters: frozen, `sys.executable` is the app, not Python.
 
-### Migration status — the one asymmetry to know
+### Both devices are fully migrated
 
-`devices/TR/teltonika.py` has **not** been migrated. It still uses raw `paramiko`, fixed `time.sleep()` waits, hardcoded addresses/passwords, and a single-format MAC parser. Everything above it in TR has been. `devices/digiIX20/digix20.py` is the reference for finishing the job — see `devices/TR/documentation/INSTRUCTIONS.md` for the suggested order.
+Every file in both device folders sits on the shared layer. Each hardware script is a list of milestone functions dispatched from `main()`, reporting progress through `status`, and both ship a `checklist.json`.
+
+The remaining behavioural difference: **`digix20.py` can resume**, detecting where the router actually is and restarting at the right milestone, while `teltonika.py` only has a coarse "already programmed, skip everything" check.
+
+**`devices/TR/config_manifest.json` is a trap for the unwary.** It lists the 82 config files pushed to a Teltonika. `og_configs/` holds 94 — the other 12 (`certificates`, `log`, `speedtest`, `siteman_*`) are per-unit device state that provisioning must not overwrite. Do not "simplify" this into an `os.listdir()`; `tests/test_tr_config_manifest.py` exists to stop that, and fails if a new file appears in `og_configs/` without a deliberate decision.
 
 ### Other things worth knowing
 
 - **Error handling** is centralized in `pages/error_log_page.py`: a global exception hook buffers output, shows one dialog (no spam), and writes a timestamped file to `logs/`. It installs itself at *import time* and monkey-patches `subprocess.run` process-wide. The app degrades gracefully rather than crashing on device errors — preserve that.
 - **A stderr write raises a modal dialog**, so it is only safe from the Qt thread. That is why `ProgramWorker` emits a `failed` signal and lets `ProgramPage` do the actual `sys.stderr.write`.
-- **`devices/TR/` holds non-code assets** that matter operationally: `og_configs/` (94 router config files, template — never modify in place; working copies go to `configs/`), `og_testfile/`/`testfile/` (same split for the Modbus test script), per-airport `.xlsx` gate sheets, and `labels/` (generated label text a physical Brady printer watches for).
+- **`devices/TR/` holds non-code assets** that matter operationally: `og_configs/` (94 router config files, template — never modify in place; working copies go to `configs/`, and only the 82 in `config_manifest.json` are pushed), `og_testfile/`/`testfile/` (same split for the Modbus test script), per-airport `.xlsx` gate sheets, and `labels/` (generated label text a physical Brady printer watches for).
 - **`devices/TR/JKC-SLC.xlsx` is corrupt** — not a valid `.xlsx`. It is skipped gracefully; the file itself still needs replacing.
 
 ## Working in this repo

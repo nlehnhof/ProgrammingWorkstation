@@ -1,6 +1,6 @@
 # Programming Workstation — Documentation
 
-**Version:** 2.0 · **Branch:** `docs-and-simplify` · **Last commit:** `e96074a` — "Simplify onto a shared utility layer; delete dead abstractions" (2026-08-04)
+**Version:** 2.1 · **Branch:** `docs-and-simplify` · **Last commit:** `HEAD` — "Migrate teltonika.py onto the shared layer" (2026-08-04)
 
 *Doc style note: formal structure with easy-to-read explanations, Mermaid diagrams for workflow, and `file:line` citations (no inline code excerpts). Set by user preference when this folder was created.*
 
@@ -20,7 +20,9 @@ Three things are worth knowing before reading further:
 2. **The end-of-run bookkeeping is one module.** Crash log, spreadsheet stamp and label file all live in `resources/utilities/reporting.py`. Each device's `prog_dev.py` previously wrote that out longhand, four times over.
 3. **`device_types/` no longer exists.** All four files in it were 100% commented out. Devices are folders, not classes — that has always been the real extension mechanism.
 
-The measurable effect: `devices/TR/prog_dev.py` went from 943 to 361 lines, `devices/digiIX20/prog_dev.py` from 353 to 104, and the test suite from 44 passing / 6 failing / 2 uncollectable modules to **66 passing**.
+The measurable effect: `devices/TR/prog_dev.py` went from 943 to 364 lines, `devices/digiIX20/prog_dev.py` from 353 to 104, and the test suite from 44 passing / 6 failing / 2 uncollectable modules to **83 passing**.
+
+**`devices/TR/teltonika.py` has since been migrated too**, so there is no longer any part of either device sitting off the shared layer. It became seven dispatched milestones with pooled connections and completion-driven waits, and TR gained the live Status checklist. Its line count barely moved (571 → 611 total, 411 → 403 executable) because 82 repetitive `sftp.put()` calls left and structure arrived in their place.
 
 ## Where to start
 

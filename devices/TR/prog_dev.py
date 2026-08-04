@@ -22,8 +22,6 @@ this file used to be six times longer and quietly wrong:
 """
 
 import os
-import re
-import shutil
 
 from resources.utilities import status
 from resources.utilities.app_paths import app_root, device_dir, script_command
@@ -39,10 +37,12 @@ from resources.utilities.reporting import (
     write_crash_log,
 )
 from resources.utilities.ssh_session import SSHSession
+from resources.utilities.templating import TemplateError, stage_template
 from resources.utilities.wait_utils import run_checked
 
 TEST_SCRIPT = "FloodLighToggle.py"
 TEST_SUCCESS_MARKER = "Bytes in received"
+PLACEHOLDER_IP = "127.0.0.1"
 
 # The BeagleBone needs its own address on the gate subnet to talk to the
 # router. .123 by convention, moved to .100 when the gate itself owns .123.
@@ -231,6 +231,14 @@ def run_main_script(airport, gate, temp_pass, device):
     # are how a failure gets recorded -- but a failed run writes no label. A
     # printable label for a router that did not program is worse than none,
     # because somebody can stick it on.
+    #
+    # This milestone is reported here rather than in teltonika.py: the label and
+    # the sheet are written by this process, after the hardware script exits.
+    if outcome["failed"]:
+        report("label", status.SKIPPED, "run failed -- no label produced")
+    else:
+        report("label", status.RUNNING)
+
     label_filename = record_result(
         device_dir=folder,
         excel_path=excel,
@@ -249,16 +257,20 @@ def run_main_script(airport, gate, temp_pass, device):
         print("Programming failed. Check the crash log.", flush=True)
         raise RuntimeError(message)
 
-    print(f"Label written: {label_filename}", flush=True)
+    if label_filename:
+        report("label", status.PASS, label_filename)
+        print(f"Label written: {label_filename}", flush=True)
+    else:
+        report("label", status.FAIL, "label could not be written")
 
     # Only test a router that programmed. Testing one that did not just
     # produces a second, confusing failure.
-    run_test_script(folder, device, airport_name, excel, gate)
+    run_test_script(folder, device, airport_name, excel, gate, report)
 
     print("Programming and testing complete. Continue to the next device.", flush=True)
 
 
-def run_test_script(folder, device, airport, excel, gate):
+def run_test_script(folder, device, airport, excel, gate, report=None):
     """Drive the Modbus floodlight toggle from the BeagleBone.
 
     Copies the pristine test script out of `og_testfile/`, points it at this
@@ -266,6 +278,9 @@ def run_test_script(folder, device, airport, excel, gate):
     subnet, and runs it. Success is the script reporting bytes received back
     from the PLC.
     """
+    report = report or status.forwarder(globals().get("progress_callback"))
+    report("testing", status.RUNNING)
+
     config = load_device_config(folder)
     failures = []
 
@@ -318,8 +333,10 @@ def run_test_script(folder, device, airport, excel, gate):
         crash_filename = write_crash_log(
             folder, f"test_{device}", airport, gate, failures
         )
+        report("testing", status.FAIL, failures[0])
     else:
         print("No error during the router test", flush=True)
+        report("testing", status.PASS)
 
     record_test_result(folder, excel, gate, failed=failed, crash_filename=crash_filename)
 
@@ -328,34 +345,20 @@ def stage_test_script(folder, address):
     """Copy `og_testfile/` to `testfile/` and point the script at `address`.
 
     The originals are never edited in place: each run rewrites a fresh working
-    copy, so a previous gate's address cannot leak into this one's test.
+    copy, so a previous gate's address cannot leak into this one's test. Shared
+    with teltonika.py, which does the same for `og_configs/`.
+
+    Returns the staged path, or None if it could not be prepared -- the caller
+    records that as a test failure rather than aborting.
     """
-    source = os.path.join(folder, "og_testfile")
-    destination = os.path.join(folder, "testfile")
-
     try:
-        os.makedirs(destination, exist_ok=True)
-        for name in os.listdir(source):
-            path = os.path.join(source, name)
-            if os.path.isfile(path):
-                shutil.copy2(path, destination)
-
-        script = os.path.join(destination, TEST_SCRIPT)
-        with open(script, "r", encoding="utf-8") as handle:
-            content = handle.read()
-
-        updated = re.sub(r"\b127\.0\.0\.1\b", str(address), content)
-        with open(script, "w", encoding="utf-8") as handle:
-            handle.write(updated)
-
-        if str(address) not in updated:
-            print(f"Incorrect! The gate IP was not written into {TEST_SCRIPT}.",
-                  flush=True)
-            return None
-
-        print(f"{TEST_SCRIPT} now points at {address}", flush=True)
-        return script
-
-    except OSError as exc:
+        return stage_template(
+            os.path.join(folder, "og_testfile"),
+            os.path.join(folder, "testfile"),
+            TEST_SCRIPT,
+            PLACEHOLDER_IP,
+            address,
+        )
+    except TemplateError as exc:
         print(f"Incorrect! Could not prepare {TEST_SCRIPT}: {exc}", flush=True)
         return None

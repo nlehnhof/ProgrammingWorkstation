@@ -1,6 +1,6 @@
 # CODE_EXPLAIN.md — Programming Workstation
 
-**Last commit:** `e96074a` (2026-08-04) — "Simplify onto a shared utility layer; delete dead abstractions"
+**Last commit:** `HEAD` (2026-08-04) — "Migrate teltonika.py onto the shared layer"
 
 Function-level explanation of every source file in the app, grouped by directory. The Teltonika device implementation (`devices/TR/`) has its own nested `documentation/CODE_EXPLAIN.md`; the Digi IX20 implementation (`devices/digiIX20/`) is covered at the end of this file.
 
@@ -16,7 +16,13 @@ Complexity ratings default to **simple** per `resources/documentation/DOCS.md`; 
 
 **Deleted:** `device_types/` in its entirety. All four files (`base_device.py`, `ssh_device.py`, `telnet_device.py`, `__init__.py`) were 100% commented out, and the three pages importing the package did so with `import *` for no symbols at all.
 
-**Rewritten:** `devices/TR/prog_dev.py` (943 → 361 lines) and `devices/digiIX20/prog_dev.py` (353 → 104). `core/manager.py` lost twelve unused imports and its `devices`/`device_credentials` split.
+**Rewritten:** `devices/TR/prog_dev.py` (943 → 364 lines) and `devices/digiIX20/prog_dev.py` (353 → 104). `core/manager.py` lost twelve unused imports and its `devices`/`device_credentials` split.
+
+**Since then, `devices/TR/teltonika.py` has been migrated too**, adding a fourth shared module:
+
+- **`templating.py`** — the `og_*` → working-copy staging both devices' template folders need. Its `patch_file` verifies by counting replacements rather than checking the new value is present afterwards, which is what catches a substitution that silently did nothing.
+
+That work also gave TR a `checklist.json` (so it has the live Status panel), moved its 82 hardcoded `sftp.put()` calls into `config_manifest.json`, and replaced its fixed `time.sleep()` waits with port down/up checks. Details are in `devices/TR/documentation/CODE_EXPLAIN.md`.
 
 ## Entry point
 
@@ -74,7 +80,7 @@ Installs itself globally the moment it's imported (`install_error_handler()` at 
 
 ## `resources/utilities/` — the shared layer
 
-Fully covered by `tests/` (66 tests). As of `e96074a` **both** devices use it.
+Fully covered by `tests/` (83 tests). **Every file in both device folders builds on this layer.**
 
 ### `resources/utilities/excel_utils.py` — **Medium**
 Header-name-based access to the airport spreadsheets. The design is driven by two properties of the real sheets:
@@ -128,6 +134,11 @@ Completion-driven replacements for fixed sleeps. `read_until(shell, patterns, ti
 ### `resources/utilities/elevate.py` — **Simple**
 `is_admin()` wraps `shell32.IsUserAnAdmin()`. `relaunch_as_admin()` calls `ShellExecuteW(..., "runas", ...)`, pinning `lpDirectory` to the app root because an elevated process would otherwise start in `C:\Windows\System32`. `ensure_admin()` no-ops when already elevated, otherwise relaunches and `os._exit(0)` (skipping `atexit`, so `error_log_page` doesn't pop a dialog on the way out). A `--elevated` flag on the relaunched copy prevents an infinite UAC loop.
 
+### `resources/utilities/templating.py` — **Simple**
+`refresh_working_copy(source, dest)` re-copies a template folder, ignoring subdirectories; `patch_file(path, old, new, occurrences=None)` substitutes a placeholder and **verifies by counting replacements**; `stage_template(...)` does both and returns the staged path. Raises `TemplateError` on anything unexpected.
+
+Two details earn their keep. The placeholder is matched as a whole token, so replacing `10.28.18.2` cannot corrupt a `10.28.18.20` elsewhere in the file. And verification counts replacements rather than checking the new value appears afterwards — the latter is satisfied by a file that already contained that address from a previous run, so a substitution that silently failed still looked correct and the previous gate's configuration went onto this gate's router. Covered by `tests/test_templating.py`.
+
 ### `resources/utilities/fonts.py` — **Simple**
 Two module-level `QFont` constants shared across pages.
 
@@ -153,6 +164,8 @@ Operator instructions live as numbered steps with reference photos in `devices/d
 
 ## `tests/`
 
-Seven files, 66 tests, run with `python -m pytest tests/` from the repo root (`pytest` is not in `requirements.txt` — see `../SETUP.md` §4). All pass.
+Nine files, 83 tests, run with `python -m pytest tests/` from the repo root (`pytest` is not in `requirements.txt` — see `../SETUP.md` §4). All pass.
+
+`test_templating.py` covers the staging helper, including the two failure modes that motivated it. `test_tr_config_manifest.py` guards the exact set of 82 config files TR pushes — it fails if the manifest ever grows to include the 12 files of per-unit device state in `og_configs/`, or if a new file appears there without a decision about whether it should ship.
 
 `test_excel_utils.py` and `test_network_utils.py` previously failed to *collect*, because they imported functions that had never been written; `e96074a` implemented them, and the tests are what specified the API. `test_prog_dev_integration.py` loads `devices/TR/prog_dev.py` via `importlib.util.spec_from_file_location` (mirroring the real `exec()`-based loading — see `WORKFLOW.md` §4) and covers TR's `get_header_map`/`col` column resolution, `lookup_excel`'s flag-don't-raise behaviour, and that `ssh_run_shell` closes its channel.

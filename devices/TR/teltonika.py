@@ -1,571 +1,611 @@
-#SSH
-import subprocess
-import time
-import paramiko
-from ping3 import ping
-import re
-import threading
+"""Teltonika RUTX08 provisioning -- runs as a subprocess launched by prog_dev.py.
 
-#GUI
-# tkinter imports removed: unused here, left over from history/dashboard.py.
-# They forced tcl/tk into the packaged build and broke it (tkinter.messagebox
-# is a submodule PyInstaller does not collect automatically).
-import time
-import ipaddress
+Usage: python teltonika.py <gate_ip> <gate_netmask> <gate_gateway> <temp_pass>
 
-import sys
-import shutil
+Structured as seven milestones dispatched from main(), each announcing itself
+so the GUI's Status checklist can follow along (see checklist.json). Every
+verification waits on something observable -- a port going down and coming
+back, an SFTP stat, a real firmware version read off the device. Nothing is
+confirmed on the strength of a `time.sleep()`.
+
+What this replaced, and why the differences matter:
+
+* It was a single 569-line run of top-level statements with no functions past
+  the SSH helpers, so a failure part-way through left no way to resume and no
+  clear report of which step failed.
+* Every operation opened its own `paramiko.SSHClient`; shells were opened and
+  never closed. One pooled `SSHSession` per phase now, with `ManagedShell`.
+* Firmware install waited a flat 3 min 15 s and the reboot a flat 1 min 30 s,
+  chosen as worst-case padding. Both now wait for the router to actually go
+  down and come back, which is both safer and usually faster.
+* The 82 config files were 82 hardcoded `sftp.put()` calls. They are now
+  `config_manifest.json` -- still exactly those 82, deliberately not "every
+  file in configs/" (see that file's comment).
+* Nothing verified that a config file arrived. Each is stat'd after transfer.
+"""
+
 import os
+import re
+import sys
 
-if len(sys.argv) > 1:
+DEVICE_DIR = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT = os.path.abspath(os.path.join(DEVICE_DIR, "..", ".."))
+if REPO_ROOT not in sys.path:
+    sys.path.insert(0, REPO_ROOT)
+
+import json
+import time
+import traceback
+
+from resources.utilities import status as _status
+from resources.utilities.device_config import load_config
+from resources.utilities.mac_utils import extract_mac
+from resources.utilities.ssh_session import SSHSession, connect_with_fallback
+from resources.utilities.templating import TemplateError, stage_template
+from resources.utilities.wait_utils import (
+    ShellClosed,
+    StepTimeout,
+    port_is_open,
+    read_until,
+    run_checked,
+    verify_remote_file,
+    wait_for_port,
+)
+
+CONFIG = load_config(DEVICE_DIR, env_prefix="TR_")
+
+status = _status.emit
+step_running = _status.running
+step_pass = _status.passed
+step_sent = _status.sent
+step_wait = _status.waiting
+step_fail = _status.failed
+
+
+class StepError(RuntimeError):
+    """A provisioning milestone failed. Message is shown to the operator."""
+
+
+class AlreadyProgrammed(Exception):
+    """This router has been programmed before; stop without treating it as a failure."""
+
+
+# ----------------------------------------------------------------------------
+# Arguments
+# ----------------------------------------------------------------------------
+
+if len(sys.argv) > 4:
     gate_ip = sys.argv[1]
     gate_netmask = sys.argv[2]
     gate_gateway = sys.argv[3]
     temp_pass = sys.argv[4]
-    print("Temp pass... \n", flush=True)
-    print(temp_pass, flush=True)
-    # my_pass = "Jetway@dm1n"
-    # temp_pass = 'y2E8LsZq'
 else:
-    gate_name = "UNKNOWN"
-    print(gate_name, flush=True)
-    sys.exit(0)
-    
-#print(f"Running Automation for: {gate_ip}", flush=True)
+    print("UNKNOWN", flush=True)
+    print("Incorrect! teltonika.py needs gate ip, netmask, gateway and password.",
+          flush=True)
+    sys.exit(2)
 
-# Short and Long Pause (sec)
-s_pause = 1
-l_pause = 2
+print(f"Gate IP: {gate_ip}", flush=True)
+print(f"Netmask: {gate_netmask}", flush=True)
+print(f"Gateway: {gate_gateway}", flush=True)
 
-# Global Variables
-# ssh_bbb = None
-# sftp_bbb = None
-# ssh_router = None
-# sftp_router = None
 
-# Passwords
-new_pswd = "Jetway@dm1n"
+class Run:
+    """Values discovered in one milestone and needed by a later one."""
 
-################# INFO ####################
-#Teltonika router intially had 0.7.11.3 Firmware Version
-# Script finishes in 8 mins
-        
-################## SSH BBB ####################
+    mac_address = None
+    router_host = None
 
-def ssh_bbb_connect():
+
+# ----------------------------------------------------------------------------
+# Connections
+# ----------------------------------------------------------------------------
+
+def bbb_session():
     print("Connecting to BBB", flush=True)
-    global ssh_bbb, sftp_bbb
-    bbb_ip = '192.168.7.2'
-    bbb_user = 'raj'
-    bbb_pass = 'Jetway'
-
-    ssh_bbb = paramiko.SSHClient()
-    ssh_bbb.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    ssh_bbb.connect(bbb_ip, username=bbb_user, password=bbb_pass)
+    session = SSHSession(
+        CONFIG["bbb_ip"], CONFIG["bbb_user"], CONFIG["bbb_password"],
+        timeout=CONFIG["ssh_timeout"],
+    )
+    session.ensure_connected()
     print("Connected to BBB", flush=True)
-    
-    sftp_bbb = ssh_bbb.open_sftp()
-    time.sleep(s_pause)
+    return session
 
-def ssh_bbb_run(cmd):
-    global ssh_bbb
-    stdin, stdout, stderr = ssh_bbb.exec_command(cmd)
-    output = stdout.read().decode()
-    error = stdout.read().decode()
-    if output is not None:
-        print("Output:\n", output, flush=True)
-    if error is not None:
-        print("Errors:\n", error, flush=True)
-    return output
 
-def ssh_bbb_upload(file, bbb_file):
-    global sftp_bbb
-    sftp_bbb.put(file, bbb_file)
-    
-def ssh_bbb_close():
+def close_bbb(session):
+    if session is None:
+        return
     print("Closing Connection to BBB", flush=True)
-    global ssh_bbb, sftp_bbb
-    if sftp_bbb:
-        sftp_bbb.close()
-    if ssh_bbb:
-        ssh_bbb.close()
-    time.sleep(s_pause)
+    session.close()
     print("Closed Connection to BBB", flush=True)
-    
-################## SSH Router  ####################
 
-def ssh_router_connect(num, admin_num):
-    print("Connecting to Router")
-    global ssh_router, sftp_router, temp_pass, new_pswd
-    router_ip = '192.168.81.1'
-    print(temp_pass, flush=True)
-    if admin_num == "admin":
-        router_user = 'admin'
-    else:
-        router_user = 'root'
-    router_temp_pass = temp_pass
-    router_new_pass = new_pswd
 
-    ssh_router = paramiko.SSHClient()
-    ssh_router.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    if num == "temp":
-        print("Using Default IP And Temp Password", flush=True)
-        router_ip = "192.168.1.1"
-        print(router_ip, flush=True)
-        print(router_user, flush=True)
-        print(router_temp_pass, flush=True)
-        time.sleep(1)
-        try:
-            # IP: 192.168.1.1 U: root P: y2E8LsZq
-            ssh_router.connect(router_ip, username=router_user, password=router_temp_pass)
-        except:
-            try:
-                router_ip = "192.168.81.1"
-                # temp_pass = new_pswd  # U: admin P: Jetway@dm1n
-                ssh_router.connect(router_ip, username=router_user, password=router_temp_pass)
-            except:
-                print("Errors in Authentication", flush=True)
-    else:
-        # only not use "temp" when we've already updated the backup to the new ip addr
-        router_ip = "192.168.81.1"
-        router_user = 'admin'
-        print("Using New Password", flush=True)
-        print(router_user, flush=True)
-        print(router_new_pass, flush=True)
-        time.sleep(1)
-        ssh_router.connect(router_ip, username=router_user, password=router_new_pass)
-    
-    print("Connected to Router", flush=True)
-    
-    shell = ssh_router.invoke_shell()
-    time.sleep(s_pause)
-    output = shell.recv(5000).decode()
-    print("Router Login Output:\n", output, flush=True)
-    
-    sftp_router = ssh_router.open_sftp()
-    time.sleep(s_pause)
-    
-    return output
+def router_candidates():
+    """Every (host, user, password) this router might currently answer on.
 
-def ssh_router_run(cmd):
-    global ssh_router
-    stdin, stdout, stderr = ssh_router.exec_command(cmd)
-    output = stdout.read().decode()
-    error = stdout.read().decode()
-    if output is not None:
-        print("Output:\n", output, flush=True)
-    if error is not None:
-        print("Errors:\n", error, flush=True)
-    return output
+    The factory address with the scanned temporary password comes first, then
+    the post-configuration address and credentials -- so a rerun against a
+    partly-configured router finds it instead of failing to authenticate. The
+    old code expressed this as a nested bare `except:` that, on total failure,
+    printed "Errors in Authentication" and carried on using a client that had
+    never connected; every subsequent step then failed obscurely.
+    """
+    hosts = [CONFIG["router_temp_ip"], CONFIG["router_fallback_ip"], CONFIG["router_new_ip"]]
+    logins = [
+        (CONFIG["router_temp_user"], temp_pass),
+        (CONFIG["router_new_user"], CONFIG["router_new_password"]),
+        (CONFIG["router_temp_user"], CONFIG["router_new_password"]),
+    ]
 
-def ssh_router_upload(file, router_file):
-    global sftp_router
-    sftp_router.put(file, router_file)
-    
-def ssh_router_close():
+    seen = set()
+    candidates = []
+    for host in hosts:
+        for user, password in logins:
+            key = (host, user, password)
+            if password and key not in seen:
+                seen.add(key)
+                candidates.append(key)
+    return candidates
+
+
+def router_session():
+    """Connect to the router wherever it currently is, or raise."""
+    print("Connecting to Router", flush=True)
+    try:
+        session = connect_with_fallback(router_candidates(), timeout=CONFIG["ssh_timeout"])
+    except ConnectionError as exc:
+        raise StepError(f"Incorrect! Could not authenticate to the router: {exc}") from exc
+    Run.router_host = session.host
+    print(f"Connected to Router at {session.host}", flush=True)
+    return session
+
+
+def close_router(session):
+    if session is None:
+        return
     print("Closing Connection to Router", flush=True)
-    global ssh_router, sftp_router
-    if sftp_router:
-        sftp_router.close()
-    if ssh_router:
-        ssh_router.close()
-    time.sleep(s_pause)
+    session.close()
     print("Closed Connection to Router", flush=True)
 
-##############################################
-######### START OF AUTOMATION SCRIPT #########
-##############################################
 
-######### CHECK IF ROUTER IS ALREADY PROGRAMMED #########
+def login_banner(session):
+    """The text RutOS prints on login -- it carries the firmware version."""
+    try:
+        with session.invoke_shell(timeout=CONFIG["cli_timeout"]) as shell:
+            try:
+                return read_until(shell, [r"[>#\$]\s*\Z"], timeout=15)
+            except (StepTimeout, ShellClosed):
+                return ""
+    except Exception as exc:
+        print(f"Could not read the router login banner: {exc}", flush=True)
+        return ""
 
-"""
-- SSH into BBB
-- ssh_bbb_run("ip addr show eth0")
-- read output
-- if /24 scope global eth0 in output
-- return the ip address it's already written to
-- else, continue with programming the router
-"""
-print("Checking if router is already programmed...", flush=True)
-ssh_bbb_connect()
-time.sleep(s_pause)
-output = ssh_bbb_run("ip addr show eth0")
-time.sleep(s_pause)
 
-# Regex for IPV4
-pattern_ipv4 = r'\b10.\d{1,3}\.\d{1,3}.123\b'
-ipv4s = re.findall(pattern_ipv4, output)
-print(ipv4s, flush=True)
-for addr in ipv4s:
-    if addr != "10.28.18.123":
-        print(f"Router already programmed to IP:{addr}", flush=True)
-        sys.exit(0)
+# ----------------------------------------------------------------------------
+# Milestone 1 -- Checking IP
+# ----------------------------------------------------------------------------
 
-""" 
--Firmware Installation
--Static IP Setup from BBB to router
--1st Login into Router and temp pass change
--Config Files Updates
--Save and Reboot
-"""
-print("STARTING ROUTER SETUP", flush=True)
-time.sleep(s_pause)
+def check_state():
+    """Confirm the BeagleBone is reachable, and stop if this gate is done.
 
-ssh_router_connect("temp", "root")
+    A router already carrying a gate address shows up as a 10.x.y.123 lease on
+    the BeagleBone. That is not a failure -- it means somebody already did this
+    one -- so it ends the run quietly rather than raising.
+    """
+    step_running("check_ip")
+    print("Checking if router is already programmed...", flush=True)
 
-################ Copy Configs from Backup #################
+    session = bbb_session()
+    try:
+        output, _, _ = run_checked(session, "ip addr show eth0")
+    finally:
+        close_bbb(session)
 
-print("Copying Configs from Backup Folder", flush=True)
-time.sleep(s_pause)
+    found = re.findall(CONFIG["bbb_programmed_pattern"], output)
+    print(found, flush=True)
+    for address in found:
+        if address != CONFIG["bbb_template_address"]:
+            print(f"Router already programmed to IP:{address}", flush=True)
+            step_pass("check_ip")
+            raise AlreadyProgrammed(address)
 
-file_path = os.path.abspath(__file__)
-print(file_path, flush=True)
-currdir = os.path.dirname(file_path)
-print(currdir, flush=True)
-source_folder = os.path.join(currdir, 'og_configs')
-destination_folder = os.path.join(currdir, 'configs')
+    step_pass("check_ip")
 
-os.makedirs(destination_folder, exist_ok=True)
 
-for filename in os.listdir(source_folder):
-    source_path = os.path.join(source_folder, filename)
-    destination_path = os.path.join(destination_folder)
-    
-    if os.path.isfile(source_path):
-        shutil.copy2(source_path, destination_path)
+# ----------------------------------------------------------------------------
+# Milestone 2 -- Staging the templates
+# ----------------------------------------------------------------------------
 
-################ Update Public Gate IP ################# UPDATED
+def stage_files():
+    """Refresh the working copies and point them at this gate.
 
-old_ip = "10.28.18.2"  # Matches whats in /config/network wan ip addr
-new_ip = str(gate_ip)
-print(new_ip, flush=True)
+    `og_configs/` and `og_testfile/` are the pristine originals and are never
+    edited; both are re-copied here, so the previous gate's address cannot
+    survive into this run. That also makes the old "revert the network file
+    afterwards" step unnecessary -- it is gone.
+    """
+    step_running("staging")
+    print("Copying configs and test file from the backup folders", flush=True)
 
-old_netmask = "255.255.255.0"
-new_netmask = str(gate_netmask)
+    try:
+        network = stage_template(
+            os.path.join(DEVICE_DIR, "og_configs"),
+            os.path.join(DEVICE_DIR, "configs"),
+            "network",
+            CONFIG["template_gate_ip"],
+            gate_ip,
+        )
+        print(f"Config staged: {network}", flush=True)
 
-with open(os.path.join(currdir, "configs/network"), 'r') as file:
-    content = file.read()
-    
-print("Replacing Old Gate Ip", flush=True)
-time.sleep(s_pause)
-updated_content = content.replace(old_ip, new_ip)
+        test_script = stage_template(
+            os.path.join(DEVICE_DIR, "og_testfile"),
+            os.path.join(DEVICE_DIR, "testfile"),
+            CONFIG["bbb_test_script"],
+            CONFIG["testfile_placeholder_ip"],
+            gate_ip,
+        )
+        print(f"Test script staged: {test_script}", flush=True)
+    except TemplateError as exc:
+        raise StepError(f"Incorrect! {exc}") from exc
 
-with open(os.path.join(currdir, "configs/network"), 'w') as file:
-    file.write(updated_content)
+    session = bbb_session()
+    try:
+        remote = f"/home/{CONFIG['bbb_user']}/{CONFIG['bbb_test_script']}"
+        print(f"Copying {CONFIG['bbb_test_script']} to the BBB", flush=True)
+        session.upload(test_script, remote)
+        verify_remote_file(session.sftp, remote, os.path.getsize(test_script))
+        print(f"{CONFIG['bbb_test_script']} verified on the BBB", flush=True)
+    except Exception as exc:
+        raise StepError(
+            f"Incorrect! {CONFIG['bbb_test_script']} not found on BBB: {exc}"
+        ) from exc
+    finally:
+        close_bbb(session)
 
-with open(os.path.join(currdir, "configs/network"), 'r') as file:
-    verify = file.read()
-    if new_ip in verify:
-        print("New Gate IP Updated", flush=True)
+    step_pass("staging")
+
+
+# ----------------------------------------------------------------------------
+# Milestone 3 -- Firmware install
+# ----------------------------------------------------------------------------
+
+def install_firmware():
+    """Copy the firmware onto the router and run sysupgrade."""
+    step_running("firmware")
+
+    local = os.path.join(DEVICE_DIR, CONFIG["firmware_filename"])
+    if not os.path.isfile(local):
+        raise StepError(f"Incorrect! Firmware file not found: {local}")
+    expected_size = os.path.getsize(local)
+    remote = CONFIG["firmware_router_path"]
+
+    router = router_session()
+    try:
+        print("Copying firmware file to router", flush=True)
+        router.upload(local, remote)
+        try:
+            verify_remote_file(router.sftp, remote, expected_size)
+        except Exception as exc:
+            raise StepError(
+                f"Incorrect! Firmware file not found on router after transfer: {exc}"
+            ) from exc
+        print(f"Firmware file found on router ({expected_size} bytes)", flush=True)
+
+        print("Installing firmware -- the router reboots itself when it finishes...",
+              flush=True)
+        with router.invoke_shell(timeout=CONFIG["cli_timeout"]) as shell:
+            shell.send(f"sysupgrade {remote}\n")
+            step_sent("firmware", "sysupgrade sent")
+            # Stay on the channel while the CLI acts on the command. Dropping it
+            # straight after the send can tear the session down before
+            # sysupgrade starts, exactly as it does for a reboot.
+            try:
+                output = read_until(
+                    shell,
+                    [r"[Ee]rror", r"[Ff]ail", r"Upgrade completed", r"Rebooting"],
+                    timeout=CONFIG["firmware_ack_timeout"],
+                )
+                if re.search(r"[Ee]rror|[Ff]ail", output):
+                    detail = " ".join(output.split())[-300:]
+                    raise StepError(f"Incorrect! Firmware install rejected: {detail}")
+            except ShellClosed:
+                print("Router closed the session; it is applying the firmware.",
+                      flush=True)
+            except StepTimeout:
+                print("No further output from sysupgrade; checking whether the "
+                      "router went down.", flush=True)
+    finally:
+        close_router(router)
+
+    step_wait("firmware", "Wait ~3 min for the firmware install...")
+    host = Run.router_host or CONFIG["router_temp_ip"]
+    print("Waiting for the router to go down...", flush=True)
+    try:
+        wait_for_port(host, 22, up=False,
+                      timeout=CONFIG["reboot_down_timeout"], label="router")
+    except StepTimeout as exc:
+        raise StepError(
+            f"Incorrect! Router never went down after sysupgrade -- it is still "
+            f"answering on {host}:22, so the firmware was not applied."
+        ) from exc
+    print("Router is installing the firmware.", flush=True)
+
+    step_pass("firmware")
+
+
+# ----------------------------------------------------------------------------
+# Milestone 4 -- First reboot / firmware verification
+# ----------------------------------------------------------------------------
+
+def verify_firmware():
+    """Wait for the router to come back, then confirm the new firmware runs."""
+    step_running("reboot_1")
+    step_wait("reboot_1", "Waiting for the router to come back...")
+
+    expected = str(CONFIG["firmware_version"])
+    print("Waiting for the router to come back...", flush=True)
+
+    host = wait_for_any_port(
+        [Run.router_host, CONFIG["router_temp_ip"], CONFIG["router_fallback_ip"]],
+        timeout=CONFIG["reboot_timeout"],
+    )
+    if host is None:
+        raise StepError(
+            "Incorrect! Router did not come back after the firmware install."
+        )
+    print(f"Router is answering at {host}", flush=True)
+    session = router_session()
+
+    try:
+        reported = login_banner(session)
+        if expected not in reported:
+            # The banner is the original check, but it is decoration -- fall
+            # back to asking the device directly rather than failing a router
+            # whose build simply prints a different greeting.
+            try:
+                version, _, _ = run_checked(session, "cat /etc/version", echo=False)
+                reported += version
+            except Exception as exc:
+                print(f"Could not read /etc/version: {exc}", flush=True)
+
+        if expected not in reported:
+            detail = " ".join(reported.split())[-200:] or "no version reported"
+            raise StepError(
+                f"Incorrect! Firmware not installed -- expected {expected}, "
+                f"router reports: {detail}"
+            )
+        print(f"Confirmed firmware install ({expected})", flush=True)
+    finally:
+        close_router(session)
+
+    step_pass("reboot_1")
+
+
+def _unique(values):
+    seen = set()
+    result = []
+    for value in values:
+        if value and value not in seen:
+            seen.add(value)
+            result.append(value)
+    return result
+
+
+def wait_for_any_port(hosts, timeout, port=22, interval=2, progress_every=30):
+    """Wait for whichever of `hosts` answers first, within one shared deadline.
+
+    The router can come back on the factory address or the configured one, and
+    which depends on how far the run got. Polling them in turn with a full
+    timeout each would take three times as long as it should on the failure
+    path -- this gives all the candidates one deadline between them.
+
+    Returns the host that answered, or None.
+    """
+    hosts = _unique(hosts)
+    deadline = time.monotonic() + timeout
+    last_note = time.monotonic()
+
+    while time.monotonic() < deadline:
+        for host in hosts:
+            if port_is_open(host, port, timeout=2):
+                return host
+        now = time.monotonic()
+        if now - last_note >= progress_every:
+            print(f"Waiting for the router on {', '.join(hosts)}... "
+                  f"~{int(deadline - now)}s left", flush=True)
+            last_note = now
+        time.sleep(interval)
+
+    return None
+
+
+# ----------------------------------------------------------------------------
+# Milestone 5 -- Configuration push
+# ----------------------------------------------------------------------------
+
+def config_files():
+    """The config files to push, in order, from config_manifest.json."""
+    path = os.path.join(DEVICE_DIR, "config_manifest.json")
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            manifest = json.load(handle)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise StepError(f"Incorrect! Could not read {path}: {exc}") from exc
+
+    names = manifest.get("files") if isinstance(manifest, dict) else manifest
+    if not names:
+        raise StepError(f"Incorrect! {path} lists no config files.")
+    return names
+
+
+def push_configs():
+    """Upload the config files to /etc/config/ and verify each one landed."""
+    step_running("config_push")
+
+    names = config_files()
+    local_dir = os.path.join(DEVICE_DIR, "configs")
+    remote_dir = CONFIG["config_router_dir"]
+    print(f"Copying {len(names)} config files to router", flush=True)
+
+    router = router_session()
+    try:
+        sftp = router.sftp
+        for index, name in enumerate(names, start=1):
+            local = os.path.join(local_dir, name)
+            if not os.path.isfile(local):
+                raise StepError(f"Incorrect! Config file missing locally: {local}")
+
+            remote = f"{remote_dir}/{name}"
+            sftp.put(local, remote)
+            try:
+                verify_remote_file(sftp, remote, os.path.getsize(local))
+            except Exception as exc:
+                raise StepError(
+                    f"Incorrect! Config file {name} did not transfer: {exc}"
+                ) from exc
+
+            if index % 20 == 0 or index == len(names):
+                step_wait("config_push", f"{index}/{len(names)} files")
+                print(f"  {index}/{len(names)} config files copied", flush=True)
+    finally:
+        close_router(router)
+
+    print("Copied all config files to router", flush=True)
+    step_pass("config_push")
+
+
+# ----------------------------------------------------------------------------
+# Milestone 6 -- Identity (MAC address)
+# ----------------------------------------------------------------------------
+
+def read_identity():
+    """Read the router's MAC. Missing is survivable; the label field goes blank."""
+    step_running("identity")
+    print("Getting MAC address", flush=True)
+
+    interface = CONFIG["router_lan_interface"]
+    router = router_session()
+    try:
+        try:
+            output, _, _ = run_checked(router, "ifconfig -a", echo=False)
+        except Exception as exc:
+            print(f"Could not run ifconfig: {exc}", flush=True)
+            output = ""
+
+        Run.mac_address = extract_mac(output, interface=interface)
+        if not Run.mac_address:
+            try:
+                link, _, _ = run_checked(router, f"ip link show {interface}", echo=False)
+                Run.mac_address = extract_mac(link, interface=interface)
+            except Exception as exc:
+                print(f"Could not run ip link: {exc}", flush=True)
+    finally:
+        close_router(router)
+
+    if Run.mac_address:
+        # prog_dev.py picks the MAC out of this exact line.
+        print("MAC Addr: " + Run.mac_address, flush=True)
+        step_pass("identity")
     else:
-        print("Incorrect! New Gate IP Not Updated", flush=True)
-        
-time.sleep(s_pause)
+        print("MAC Address Not Correctly Extracted", flush=True)
+        status("identity", _status.SKIPPED, "no MAC found; label field will be blank")
 
-############# Copy Python Test File to BBB ############ UPDATED
 
-print("Copying Test File from Backup Folder", flush=True)
-time.sleep(s_pause)
+# ----------------------------------------------------------------------------
+# Milestone 7 -- Final reboot
+# ----------------------------------------------------------------------------
 
-source_folder = os.path.join(currdir, 'og_testfile')
-destination_folder = os.path.join(currdir, 'testfile')
+def final_reboot():
+    """Reboot so the pushed configuration takes effect, and wait for it back."""
+    step_running("reboot_2")
 
-os.makedirs(destination_folder, exist_ok=True)
+    host = Run.router_host or CONFIG["router_fallback_ip"]
+    router = router_session()
+    try:
+        host = router.host
+        with router.invoke_shell(timeout=CONFIG["cli_timeout"]) as shell:
+            print("Rebooting Router", flush=True)
+            shell.send("reboot\n")
+            step_sent("reboot_2", "reboot command sent")
+            # Keep the channel open until the box actually stops answering:
+            # closing it straight after the send can abort the command.
+            try:
+                read_until(shell, [r"[Rr]eboot", r"[Ee]rror"], timeout=15)
+            except (StepTimeout, ShellClosed):
+                pass
+    finally:
+        close_router(router)
 
-for filename in os.listdir(source_folder):
-    source_path = os.path.join(source_folder, filename)
-    destination_path = os.path.join(destination_folder, filename)
-    
-    if os.path.isfile(source_path):
-        shutil.copy2(source_path, destination_path)
+    step_wait("reboot_2", "Wait ~1.5 min for device to reboot...")
+    print("Waiting for the router to go down...", flush=True)
+    try:
+        wait_for_port(host, 22, up=False,
+                      timeout=CONFIG["reboot_down_timeout"], label="router")
+        print("Router is rebooting.", flush=True)
+    except StepTimeout:
+        # Not fatal: the configuration is already on the box. The old code did
+        # not check this at all, so failing the run here would reject routers
+        # that previously passed.
+        print("Router did not drop its connection; continuing.", flush=True)
 
-old_rip = "127.0.0.1"  ## Get the new_ip into FloodLighToggle.py  (different than the other old_ip!!!!!)
-new_ip = str(gate_ip)
-
-with open(os.path.join(currdir, "testfile/FloodLighToggle.py"), 'r') as file:
-    content = file.read()
-    
-print("Replacing Old Gate Ip", flush=True)
-time.sleep(s_pause)
-updated_content = content.replace(old_rip, new_ip)
-
-with open(os.path.join(currdir, "testfile/FloodLighToggle.py"), 'w') as file:
-    file.write(updated_content)
-
-with open(os.path.join(currdir, "testfile/FloodLighToggle.py"), 'r') as file:
-    verify = file.read()
-    if new_ip in verify:
-        print("New Gate IP Updated", flush=True)
+    print("Waiting for the router to come back...", flush=True)
+    back = wait_for_any_port(
+        [host, CONFIG["router_new_ip"], CONFIG["router_fallback_ip"]],
+        timeout=CONFIG["reboot_timeout"],
+    )
+    if back:
+        Run.router_host = back
+        print(f"Router is back at {back}", flush=True)
     else:
-        print("Incorrect! New Gate IP Not Updated Tel2", flush=True)
-        
-time.sleep(s_pause)
+        print("Router did not answer on any known address after the reboot.",
+              flush=True)
 
-ssh_bbb_connect()
-print("Copying FloodLighToggle.py File to BBB", flush=True)
-time.sleep(s_pause)
-flood = os.path.join(currdir, "testfile/FloodLighToggle.py")
-ssh_bbb_upload(flood, "/home/raj/FloodLighToggle.py")
-time.sleep(s_pause)
-
-print("Verifying FloodLighToggle.py File Upload", flush=True)
-time.sleep(s_pause)
-output = ssh_bbb_run("ls -l /home/raj/")
-time.sleep(s_pause)
-if "FloodLighToggle.py" in output:
-    print("FloodLighToggle.py found on BBB", flush=True)
-else:
-    print("Incorrect! FloodLighToggle.py not found on BBB!", flush=True)
-    ssh_bbb_close()
-    exit()
-time.sleep(s_pause)
-print("\n")
-
-ssh_bbb_close()
-
-############## Copy Firmware to Router ############# UPDATED
-
-ssh_router_connect("temp", "root")
-
-print("Copying Firmware File to Router", flush=True)
-# time.sleep(l_pause)
-# sftp_router.put(os.path.join(currdir, "/backup-RUTX08-2026-04-09.tar.gz"), "/tmp/backup-RUTX08-2026-04-09.tar.gz")
-time.sleep(l_pause)
-print("Currdir ", currdir, flush=True)
-firm = os.path.join(currdir, "RUTX_R_00.07.22.3_WEBUI.bin")
-print(firm, flush=True)
-
-sftp_router.put(firm, "/tmp/RUTX_R_00.07.22.3_WEBUI.bin")
-
-# print("Added Backup File to Router -- Changed IP Addr", flush=True)
-print("Added Firmware File to Router", flush=True)
-time.sleep(s_pause)
-
-shell = ssh_router.invoke_shell()
-
-shell.send(b"ls -l /tmp/\n")
-time.sleep(s_pause)
-output = shell.recv(5000).decode()
-print(output, flush=True)
-time.sleep(s_pause)
-
-if "RUTX_R_00.07.22.3_WEBUI.bin" in output:
-    print("Firmware File Found on Router", flush=True)
-else:
-    print("Incorrect! Firmware File Not Found on Router", flush=True)
-    ssh_router_close()
-    ssh_bbb_close()
-    exit()
-    
-time.sleep(s_pause)
-shell.close()
-
-################# Firmware Install ################# UPDATED
-
-print("Installing Firmware", flush=True)
-time.sleep(s_pause)
-ssh_router_run("sysupgrade /tmp/RUTX_R_00.07.22.3_WEBUI.bin\n")
-time.sleep(s_pause)
-output = shell.recv(4096).decode()
-print(output)
-# print("Waiting for 5 minutes for Install", flush=True)
-# time.sleep(60)
-print("3 min left", flush=True)
-time.sleep(75)
-print("2 min left", flush=True)
-time.sleep(60)
-print("1 min left", flush=True)
-time.sleep(60)
-# print("1 min left", flush=True)
-# time.sleep(60)
-print("Install Done", flush=True)
-time.sleep(s_pause)
-
-######## First Time Login/Change Pass ######## UPDATED
-print("Connecting to Router", flush=True)
-output = ssh_router_connect("temp", "root")
-time.sleep(s_pause)
+    print("FINISHED SETTING UP ROUTER", flush=True)
+    step_pass("reboot_2")
 
 
-if "07.22" in output:
-    print("Confirmed Firmware Install", flush=True)
-else:
-    print("Incorrect! Firmware Not Installed", flush=True)
-    ssh_router_close()
-    ssh_bbb_close()
-    exit()
+# ----------------------------------------------------------------------------
+# Entry point
+# ----------------------------------------------------------------------------
 
-############### UPDATE CONFIGURATION ###############
+STEPS = [
+    ("check_ip", check_state),
+    ("staging", stage_files),
+    ("firmware", install_firmware),
+    ("reboot_1", verify_firmware),
+    ("config_push", push_configs),
+    ("identity", read_identity),
+    ("reboot_2", final_reboot),
+]
 
-print("Setting Up Configuration File", flush=True)
-time.sleep(l_pause)
 
-ssh_router_connect("temp", "root")
+def main():
+    print("STARTING ROUTER SETUP", flush=True)
+    current_step = None
+    try:
+        for step_id, func in STEPS:
+            current_step = step_id
+            func()
+    except AlreadyProgrammed:
+        # Deliberately a success: the gate is done, there is just nothing to do.
+        for step_id, _ in STEPS[1:]:
+            status(step_id, _status.SKIPPED, "router already programmed")
+        print("Nothing to do; the router is already programmed.", flush=True)
+        return 0
+    except StepError as exc:
+        step_fail(current_step or "check_ip", str(exc))
+        print(str(exc), flush=True)
+        traceback.print_exc()
+        return 1
+    except Exception as exc:
+        step_fail(current_step or "check_ip", f"{type(exc).__name__}: {exc}")
+        print(f"Incorrect! {type(exc).__name__}: {exc}", flush=True)
+        traceback.print_exc()
+        return 1
 
-############## Config Files to Router ############## UPDATED
+    print("Done.", flush=True)
+    return 0
 
-#82 config files
-print("Copying All Config Files to Router", flush=True)
-time.sleep(l_pause)
 
-local_path = os.path.join(currdir, "configs")
-sftp_router.put(f"{local_path}/avl", "/etc/config/avl")
-sftp_router.put(f"{local_path}/bgp", "/etc/config/bgp")
-sftp_router.put(f"{local_path}/ble_devices", "/etc/config/ble_devices")
-sftp_router.put(f"{local_path}/blesem", "/etc/config/blesem")
-sftp_router.put(f"{local_path}/buttons", "/etc/config/buttons")
-sftp_router.put(f"{local_path}/call_utils", "/etc/config/call_utils")
-sftp_router.put(f"{local_path}/chilli", "/etc/config/chilli")
-sftp_router.put(f"{local_path}/cli", "/etc/config/cli")
-sftp_router.put(f"{local_path}/connchecker", "/etc/config/connchecker")
-sftp_router.put(f"{local_path}/data_sender", "/etc/config/data_sender")
-sftp_router.put(f"{local_path}/ddns", "/etc/config/ddns")
-sftp_router.put(f"{local_path}/dfota", "/etc/config/dfota")
-sftp_router.put(f"{local_path}/dhcp", "/etc/config/dhcp")
-sftp_router.put(f"{local_path}/dmvpn", "/etc/config/dmvpn")
-sftp_router.put(f"{local_path}/dot1x", "/etc/config/dot1x")
-sftp_router.put(f"{local_path}/dropbear", "/etc/config/dropbear")
-sftp_router.put(f"{local_path}/eigrp", "/etc/config/eigrp")
-sftp_router.put(f"{local_path}/email_to_sms", "/etc/config/email_to_sms")
-sftp_router.put(f"{local_path}/etherwake", "/etc/config/etherwake")
-sftp_router.put(f"{local_path}/event_juggler", "/etc/config/event_juggler")
-sftp_router.put(f"{local_path}/firewall", "/etc/config/firewall")
-sftp_router.put(f"{local_path}/fstab", "/etc/config/fstab")
-sftp_router.put(f"{local_path}/gps", "/etc/config/gps")
-sftp_router.put(f"{local_path}/hostblock", "/etc/config/hostblock")
-sftp_router.put(f"{local_path}/impulse_counter", "/etc/config/impulse_counter")
-sftp_router.put(f"{local_path}/io_scheduler", "/etc/config/io_scheduler")
-sftp_router.put(f"{local_path}/ioman", "/etc/config/ioman")
-sftp_router.put(f"{local_path}/ip_blockd", "/etc/config/ip_blockd")
-sftp_router.put(f"{local_path}/ipsec", "/etc/config/ipsec")
-sftp_router.put(f"{local_path}/landingpage", "/etc/config/landingpage")
-sftp_router.put(f"{local_path}/mdcollectd", "/etc/config/mdcollectd")
-sftp_router.put(f"{local_path}/modbus_client", "/etc/config/modbus_client")
-sftp_router.put(f"{local_path}/modbus_server", "/etc/config/modbus_server")
-sftp_router.put(f"{local_path}/modbusgateway", "/etc/config/modbusgateway")
-sftp_router.put(f"{local_path}/mosquitto", "/etc/config/mosquitto")
-sftp_router.put(f"{local_path}/mqtt_pub", "/etc/config/mqtt_pub")
-sftp_router.put(f"{local_path}/multi_wifi", "/etc/config/multi_wifi")
-sftp_router.put(f"{local_path}/mwan3", "/etc/config/mwan3")
-sftp_router.put(f"{local_path}/network", "/etc/config/network")
-sftp_router.put(f"{local_path}/nhrp", "/etc/config/nhrp")
-sftp_router.put(f"{local_path}/nlbwmon", "/etc/config/nlbwmon")
-sftp_router.put(f"{local_path}/ntpclient", "/etc/config/ntpclient")
-sftp_router.put(f"{local_path}/ntpserver", "/etc/config/ntpserver")
-sftp_router.put(f"{local_path}/openssl", "/etc/config/openssl")
-sftp_router.put(f"{local_path}/openvpn", "/etc/config/openvpn")
-sftp_router.put(f"{local_path}/operctl", "/etc/config/operctl")
-sftp_router.put(f"{local_path}/ospf", "/etc/config/ospf")
-sftp_router.put(f"{local_path}/overview", "/etc/config/overview")
-sftp_router.put(f"{local_path}/package_restore", "/etc/config/package_restore")
-sftp_router.put(f"{local_path}/password_policy", "/etc/config/password_policy")
-sftp_router.put(f"{local_path}/periodic_reboot", "/etc/config/periodic_reboot")
-sftp_router.put(f"{local_path}/ping_reboot", "/etc/config/ping_reboot")
-sftp_router.put(f"{local_path}/pptpd", "/etc/config/pptpd")
-sftp_router.put(f"{local_path}/privoxy", "/etc/config/privoxy")
-sftp_router.put(f"{local_path}/profiles", "/etc/config/profiles")
-sftp_router.put(f"{local_path}/relayd", "/etc/config/relayd")
-sftp_router.put(f"{local_path}/rip", "/etc/config/rip")
-sftp_router.put(f"{local_path}/rms_mqtt", "/etc/config/rms_mqtt")
-sftp_router.put(f"{local_path}/rpcd", "/etc/config/rpcd")
-sftp_router.put(f"{local_path}/rs_console", "/etc/config/rs_console")
-sftp_router.put(f"{local_path}/rs_modbus", "/etc/config/rs_modbus")
-sftp_router.put(f"{local_path}/rs_modem", "/etc/config/rs_modem")
-sftp_router.put(f"{local_path}/rs_overip", "/etc/config/rs_overip")
-sftp_router.put(f"{local_path}/rut_fota", "/etc/config/rut_fota")
-sftp_router.put(f"{local_path}/sim_switch", "/etc/config/sim_switch")
-sftp_router.put(f"{local_path}/simcard", "/etc/config/simcard")
-sftp_router.put(f"{local_path}/sms_gateway", "/etc/config/sms_gateway")
-sftp_router.put(f"{local_path}/sms_utils", "/etc/config/sms_utils")
-sftp_router.put(f"{local_path}/snmpd", "/etc/config/snmpd")
-sftp_router.put(f"{local_path}/snmptrap", "/etc/config/snmptrap")
-sftp_router.put(f"{local_path}/sqm", "/etc/config/sqm")
-sftp_router.put(f"{local_path}/stunnel", "/etc/config/stunnel")
-sftp_router.put(f"{local_path}/system", "/etc/config/system")
-sftp_router.put(f"{local_path}/travelmate", "/etc/config/travelmate")
-sftp_router.put(f"{local_path}/uhttpd", "/etc/config/uhttpd")
-sftp_router.put(f"{local_path}/ulogd", "/etc/config/ulogd")
-sftp_router.put(f"{local_path}/user_groups", "/etc/config/user_groups")
-sftp_router.put(f"{local_path}/vrrpd", "/etc/config/vrrpd")
-sftp_router.put(f"{local_path}/vuci", "/etc/config/vuci")
-sftp_router.put(f"{local_path}/widget", "/etc/config/widget")
-sftp_router.put(f"{local_path}/wifi_scanner", "/etc/config/wifi_scanner")
-sftp_router.put(f"{local_path}/xl2tpd", "/etc/config/xl2tpd")
-
-print("Copied All Config Files to Router", flush=True)
-time.sleep(l_pause)
-
-#################### Get MAC Address ##################### UPDATED
-mac = None
-
-shell = ssh_router.invoke_shell()
-time.sleep(s_pause)
-shell.recv(1000)
-
-print("Getting MAC Address", flush=True)
-time.sleep(s_pause)
-shell.send(b"ifconfig -a\n")
-time.sleep(s_pause)
-output = shell.recv(2000).decode()
-for line in output.splitlines():
-    if new_ip in line:
-        print("Found new ip in output", flush=True)
-    if "eth0" in line and "HWaddr" in line:
-        mac = line.split("HWaddr")[1].strip()
-        break
-if mac:
-    print("MAC Addr: " + mac, flush=True)
-else:
-    print("MAC Address Not Correctly Extracted", flush=True)
-    
-time.sleep(s_pause)
-
-######################## Reboot ########################## UPDATED
-
-print("Rebooting Router", flush=True)
-time.sleep(l_pause)
-ssh_router_run("reboot\n")
-time.sleep(s_pause)
-
-old_ip = str(gate_ip)
-new_ip = "10.28.18.2"   ## WAN IP address for the router without programming -- Just reset the files for next time
-
-with open(os.path.join(currdir, 'configs/network'), 'r') as file:
-    content = file.read()
-    
-print("Reverting Network File", flush=True)
-time.sleep(s_pause)
-updated_content = content.replace(old_ip, new_ip)
-
-with open(os.path.join(currdir, "configs/network"), 'w') as file:
-    file.write(updated_content)
-
-with open(os.path.join(currdir, "configs/network"), 'r') as file:
-    verify = file.read()
-    if new_ip in verify:
-        print("New IP revert: ", new_ip, flush=True)
-        print("Network File Reverted", flush=True)
-    else:
-        print("Incorrect! Network File Not Reverted", flush=True)
-        
-print("Please Wait 1.5 Mins for Reboot", flush=True)
-time.sleep(30)
-print("1 min left", flush=True)
-time.sleep(60)
-# print("1 min left", flush=True)
-# time.sleep(60)
-print("Reboot Done", flush=True)
-time.sleep(s_pause)
-
-print("FINISHED SETTING UP ROUTER")
-time.sleep(s_pause)
-
-ssh_bbb_connect()
-time.sleep(s_pause)
-output = ssh_bbb_run("ip addr show eth0")
-time.sleep(s_pause)
-
-# Regex for IPV4
-pattern_ipv4 = r'\b10.\d{1,3}\.\d{1,3}.123\b'
-ipv4s = re.findall(pattern_ipv4, output)
-print(ipv4s, flush=True)
+if __name__ == "__main__":
+    sys.exit(main())

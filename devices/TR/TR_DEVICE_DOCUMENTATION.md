@@ -13,21 +13,23 @@
 > code does *today*, see [`documentation/`](documentation/) in this folder,
 > which is kept in sync with each commit.
 >
-> As of `e96074a` the two halves of this device are at different stages:
+> **Both halves of this device have now been migrated**, so the architecture
+> this document describes is the architecture that runs:
 >
-> * **`prog_dev.py` has been migrated** onto the shared utility layer and now
->   matches what this document describes — layered config (`device_config.json`
->   plus `TR_*` environment variables), pooled `SSHSession`, header-based Excel
->   access, and shared crash-log/label/sheet reporting. It went from 943 to 361
->   lines.
-> * **`teltonika.py` has not been migrated.** It still uses raw `paramiko`,
->   fixed `time.sleep()` waits, hardcoded addresses and passwords, and a
->   single-format MAC parser. Where this document describes those subsystems,
->   treat it as design intent for that file rather than a description of it.
+> * **`prog_dev.py`** (943 → 364 lines) — layered config, pooled `SSHSession`,
+>   header-based Excel access, shared crash-log/label/sheet reporting.
+> * **`teltonika.py`** — seven dispatched milestones instead of a flat script,
+>   pooled connections, completion-driven waits in place of fixed sleeps,
+>   `mac_utils` for MAC extraction, and every address, credential and timeout
+>   read from `device_config.json`.
 >
-> ⚠️ Because of that split, a `TR_*` environment variable affects the
-> orchestration and functional-test layers but **not** the values used inside
-> `teltonika.py`. See `documentation/INSTRUCTIONS.md`.
+> `TR_*` environment variables therefore work throughout. TR also ships a
+> `checklist.json` now, so it has the live Status panel.
+>
+> ⚠️ Two details this document predates: the router config push covers **82**
+> of the 94 files in `og_configs/` (the list is `config_manifest.json`; the 12
+> omitted are per-unit device state), and the old "revert the network file
+> afterwards" step is gone as redundant.
 
 ---
 

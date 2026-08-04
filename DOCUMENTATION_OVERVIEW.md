@@ -27,15 +27,15 @@ A PyQt5 desktop app that walks a technician through provisioning field devices �
 - **A device is a folder**, not a class. `devices/{NAME}/` holds everything that device needs; registering one copies the folder and records it in `core/devices.json`. There is no base class to subclass.
 - **`pages/`** is the UI: a `QStackedWidget` with four pages, plus a global error handler that logs everything and pops one dialog per run.
 - **`resources/utilities/`** is the shared, tested layer — spreadsheets, SSH, waits, config, and the run-reporting that produces labels and crash logs.
-- **Each device's `prog_dev.py`** is orchestration only: look up the gate, run the hardware script as a subprocess, record what happened. Both are now thin (104 and 361 lines).
-- **Each device's hardware script** (`digix20.py`, `teltonika.py`) is the part that actually talks to the router, and is the only place that should need to know anything about it.
+- **Each device's `prog_dev.py`** is orchestration only: look up the gate, run the hardware script as a subprocess, record what happened. Both are now thin (104 and 364 lines).
+- **Each device's hardware script** (`digix20.py`, `teltonika.py`) is the part that actually talks to the router, and is the only place that should need to know anything about it. Both are now structured as milestone functions that report progress to the GUI checklist.
 
 ## Known limitations
 
 Carried forward because they are still true:
 
 - **Credentials are plaintext** in `core/devices.json` and each `device_config.json`. Deliberate and documented, not an oversight.
-- **`devices/TR/teltonika.py` has not been migrated** to the shared layer — it still uses raw `paramiko` and fixed `time.sleep()` waits. `devices/digiIX20/digix20.py` is the reference for what it should become. Everything *above* it in TR has been migrated.
+- **TR cannot resume a failed run.** `digix20.py` detects where the router currently is and restarts at the right milestone; `teltonika.py` only has a coarse "already programmed, skip everything" check, so a failure part-way through still means a factory reset. This is now the largest difference between the two devices.
 - **`devices/TR/JKC-SLC.xlsx` is a corrupt file** and needs replacing from a good copy. It is skipped gracefully rather than crashing the app.
 
 The full, current list is in [`documentation/INSTRUCTIONS.md`](documentation/INSTRUCTIONS.md#known-issues--future-actions).

@@ -1,6 +1,6 @@
 # SETUP.md — First-time setup on a new device
 
-**Version:** 1.0 · **Branch:** `sparse` · **Last updated:** 2026-08-03
+**Version:** 1.1 · **Branch:** `docs-and-simplify` · **Last updated:** 2026-08-04
 
 How to get the Programming Workstation running on a machine that has never had it
 before. For day-to-day work inside the repo, see `documentation/INSTRUCTIONS.md`.
@@ -72,7 +72,7 @@ test with `ModuleNotFoundError: No module named 'resources'`.
 .\venv\Scripts\python.exe -m pytest tests/
 ```
 
-**All 66 tests should pass.** A failure here means something is genuinely wrong
+**All 83 tests should pass.** A failure here means something is genuinely wrong
 with the environment or the code — there are no known-bad tests to ignore.
 
 (Older notes described 6 failures and 2 collection errors. Those tests were
@@ -168,8 +168,9 @@ repo. Rebuild on each machine.
 ```
 
 In the app: **Program Device** → pick `digiIX20`. The right-hand **Status** panel
-should list seven greyed-out milestones (Checking IP … Testing). If that panel is
-empty, `devices/digiIX20/checklist.json` is missing.
+should list nine greyed-out milestones (Scanning for Router … Making Label).
+Picking `TR` should show nine of its own (Checking IP … Testing). If a panel is
+empty, that device's `checklist.json` is missing.
 
 ---
 

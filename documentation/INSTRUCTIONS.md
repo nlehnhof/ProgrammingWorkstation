@@ -1,6 +1,6 @@
 # INSTRUCTIONS.md — Programming Workstation
 
-**Version:** 2.0 · **Last updated:** 2026-08-04 (`e96074a`)
+**Version:** 2.1 · **Last updated:** 2026-08-04 (teltonika.py migration)
 
 > **Setting up a machine that has never run this before?** Start with
 > [`../SETUP.md`](../SETUP.md). This file assumes the repo already runs.
@@ -25,7 +25,7 @@
    ./venv/Scripts/python.exe -m pytest tests/
    ./venv/Scripts/python.exe -m pytest tests/test_ssh_session.py::test_connects_lazily_on_first_use   # single test
    ```
-   All 66 tests should pass. If `pytest` is missing, `./venv/Scripts/python.exe -m pip install pytest`.
+   All 83 tests should pass. If `pytest` is missing, `./venv/Scripts/python.exe -m pip install pytest`.
 
 There is no linter/formatter configuration in this repo (no `.flake8`, `pyproject.toml`, `.pre-commit-config.yaml`).
 
@@ -36,7 +36,7 @@ There is no linter/formatter configuration in this repo (no `.flake8`, `pyprojec
 3. Click **Home**, then **Program Device**. Pick a registered device, an airport spreadsheet, and a gate from the dropdowns.
 4. Tick every cabling checkbox. These come from `devices/{device}/instructions.txt` and gate the Program button — it stays disabled until all are ticked.
 5. Scan (or type) the device's QR code text into the password field and hit **Submit** — the app extracts whatever follows `PW:` up to the next `;`, or uses the raw text if that pattern isn't present.
-6. Hit **Program Device**. The run happens on a background worker thread, so the window stays responsive for the several minutes hardware operations take. For a device that ships a `checklist.json` (currently `digiIX20`), the right-hand **Status** panel shows each milestone flipping to a green `PASS` or red `FAIL`, with an elapsed timer on the step in flight.
+6. Hit **Program Device**. The run happens on a background worker thread, so the window stays responsive for the several minutes hardware operations take. For a device that ships a `checklist.json` (both `digiIX20` and `TR` do), the right-hand **Status** panel shows each milestone flipping to a green `PASS` or red `FAIL`, with an elapsed timer on the step in flight.
 7. On completion, check the device's own folder for artifacts — `devices/{device}/router_labels/` and `devices/{device}/crash_logs/` — plus the source Excel file, where the gate's row now carries the MAC, a timestamp (**black = success, red = failure**), and hyperlinks to the label and any crash log.
 
 ### Reading the spreadsheet afterwards
@@ -86,7 +86,7 @@ A device is a **folder**, not a class — there is no base class to subclass.
 Observed in code, not aspirational:
 
 - **`devices/TR/JKC-SLC.xlsx` is corrupt** — it is not a valid `.xlsx` (openpyxl: "File is not a zip file"). It is skipped gracefully now (the Gate dropdown comes back empty rather than crashing), but the file itself still needs replacing from a good copy.
-- **`devices/TR/teltonika.py` has not been migrated.** `prog_dev.py` has; the hardware script beneath it still opens a raw `paramiko.SSHClient` per connection, waits on fixed `time.sleep()` calls, and parses MACs with its own single-format `"HWaddr" in line` check. `devices/digiIX20/digix20.py` is the reference for doing to it what `e96074a` did to `prog_dev.py`.
+- **TR cannot resume a failed run.** `digix20.py` works out where the router currently is and restarts at the right milestone; `teltonika.py` only has a coarse "already programmed, skip everything" check, so a failure part-way through still means a factory reset before the next attempt. This is now the largest behavioural difference between the two devices.
 - **`pages/add_device_page.py` references a trash-icon path** (`utilities\\trash.jpg`) that doesn't match the actual asset location, so the delete-row button renders blank.
 - **`ConnectionPage` is unreachable from the normal flow.** It exists at index 3 but nothing navigates to it; the per-device cabling checkboxes do the hardware-verification job instead. Either wire it in or remove it.
 - **`error_log_page` monkey-patches `subprocess.run` process-wide**, forcing `check=True` and `capture_output=True` on every call site, including code that didn't ask for it.
@@ -106,7 +106,7 @@ A: Either that sheet has no `PBB SN` column in its header row, or the file is un
 A: Every cabling checkbox has to be ticked first. If no checkboxes appear at all, `devices/{device}/instructions.txt` is missing or empty.
 
 **Q: The Status panel is empty for my device.**
-A: That device has no `checklist.json`. Only `digiIX20` ships one. See "Adding a new device type".
+A: That device has no `checklist.json`. Both `digiIX20` and `TR` ship one; a device you add yourself will not until you write it. See "Adding a new device type".
 
 **Q: A gate row got a red timestamp but no crash log link. Why?**
 A: The crash log couldn't be written (usually a permissions problem on `crash_logs/`). The failure is still recorded by the red timestamp — `reporting.write_crash_log` never raises, because losing the log must not also lose the sheet update.

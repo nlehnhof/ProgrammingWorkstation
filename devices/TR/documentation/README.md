@@ -1,6 +1,6 @@
 # Teltonika RUTX08 (TR) Device — Documentation
 
-**Version:** 2.0 · **Branch:** `docs-and-simplify` · **Last commit:** `e96074a` — "Simplify onto a shared utility layer; delete dead abstractions" (2026-08-04)
+**Version:** 3.0 · **Branch:** `docs-and-simplify` · **Last commit:** `HEAD` — "Migrate teltonika.py onto the shared layer" (2026-08-04)
 
 *Doc style: formal structure, easy-to-read explanations, Mermaid diagrams, `file:line` citations only — same preferences recorded in `../../../documentation/README.md`.*
 
@@ -10,12 +10,14 @@ This folder documents `devices/TR/` in isolation: the Teltonika RUTX08 router pr
 
 **Read this first if you're debugging a TR provisioning run.** It describes what actually runs today.
 
-The two files here are at different stages, and the difference matters constantly:
+**Both files now sit on the shared utility layer.** `prog_dev.py` was migrated first (943 → 364 lines, taking three real bugs with it); `teltonika.py` followed, becoming seven dispatched milestones with pooled `SSHSession` connections, completion-driven waits, and configuration read from `device_config.json`.
 
-- **`prog_dev.py` was migrated in `e96074a`** onto the shared utility layer — header-based Excel access, pooled `SSHSession`, `device_config.json` (so `TR_*` environment variables now work), and the shared crash-log/label/sheet-stamping module. It went from 943 to 361 lines, and three real bugs went with it.
-- **`teltonika.py` has not been migrated.** It still opens a raw `paramiko.SSHClient` per connection, waits on fixed `time.sleep()` calls, hardcodes its addresses and passwords, and parses MACs with a single-format check.
+Two consequences worth knowing up front:
 
-`CODE_EXPLAIN.md` covers both and ends with a suggested migration order for `teltonika.py`; `devices/digiIX20/digix20.py` is the worked example.
+- **TR has a live Status checklist now.** Nine milestones, the same panel the Digi has had.
+- **`TR_*` environment variables work everywhere.** Nothing is hardcoded in either script.
+
+The one thing to be careful about: `config_manifest.json` lists the **82** files pushed to the router, deliberately not all 94 in `og_configs/`. The 12 it omits are per-unit device state. See `CODE_EXPLAIN.md`.
 
 ## Files in this folder
 
